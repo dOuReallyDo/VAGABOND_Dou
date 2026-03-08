@@ -25,9 +25,11 @@ function cn(...inputs: ClassValue[]) {
 // Immagine da screenshot (thum.io) o fallback dinamico (loremflickr)
 const getImageUrl = (item: any, keyword: string) => {
   // Se l'IA ha fornito un URL immagine che sembra valido, proviamo a usarlo
-  if (item?.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http')) {
-    const url = item.imageUrl.trim();
-    const bad = ['source.unsplash.com', 'picsum', 'google.com/imgres', 'gstatic', 'instagram', 'pinterest', 'flickr.com/photos'];
+  const imageUrl = item?.imageUrl || item?.heroImageUrl;
+  if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
+    const url = imageUrl.trim();
+    // Blacklist di domini che spesso non permettono hotlinking o non sono immagini dirette
+    const bad = ['google.com/imgres', 'instagram.com', 'pinterest.com', 'flickr.com/photos', 'facebook.com'];
     if (!bad.some((b) => url.includes(b))) return url;
   }
 
@@ -51,6 +53,16 @@ const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 };
 
 // Link sicuri: fallback a Google Search, mai 404
+const getBookingUrl = (hotelName: string, city: string, startDate: string, endDate: string, people: { adults: number, children: { age: number }[] }) => {
+  const checkin = startDate;
+  const checkout = endDate;
+  const adults = people.adults;
+  const children = people.children.length;
+  const ages = people.children.map(c => `&age=${c.age}`).join('');
+  
+  return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(hotelName + ' ' + city)}&checkin=${checkin}&checkout=${checkout}&group_adults=${adults}&group_children=${children}${ages}&selected_currency=EUR`;
+};
+
 const getSafeLink = (url: string | undefined, name: string, destination?: string): string => {
   // Se è un pernottamento, forziamo la ricerca per trovare l'hotel specifico
   if (name.toLowerCase().includes('pernottamento')) {
@@ -209,7 +221,7 @@ function Badge({ children, color = 'default' }: { children: React.ReactNode; col
   );
 }
 
-function AccommodationReviewer({ stops, onAdd }: { stops: any[]; onAdd?: (hotel: any, stopIndex: number) => void }) {
+function AccommodationReviewer({ stops, inputs, onAdd }: { stops: any[]; inputs: any; onAdd?: (hotel: any, stopIndex: number) => void }) {
   const [name, setName] = useState('');
   const [stopIndex, setStopIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -223,11 +235,32 @@ function AccommodationReviewer({ stops, onAdd }: { stops: any[]; onAdd?: (hotel:
     const selectedStop = stops[stopIndex];
     if (!selectedStop) return;
 
+    // Calcola le date per la tappa specifica
+    let currentOffset = 0;
+    for (let i = 0; i < stopIndex; i++) {
+      currentOffset += stops[i].nights || 0;
+    }
+    
+    const start = new Date(inputs.startDate);
+    const stopStart = new Date(start);
+    stopStart.setDate(start.getDate() + currentOffset);
+    
+    const stopEnd = new Date(stopStart);
+    stopEnd.setDate(stopStart.getDate() + (selectedStop.nights || 1));
+
+    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const data = await summarizeAccommodationReviews(name, selectedStop.stopName);
+      const data = await summarizeAccommodationReviews(
+        name, 
+        selectedStop.stopName,
+        formatDate(stopStart),
+        formatDate(stopEnd),
+        inputs.people
+      );
       
       if (data.exists === false) {
         setError(`L'alloggio "${name}" non sembra esistere a ${selectedStop.stopName}. Per favore verifica il nome o la tappa.`);
@@ -251,8 +284,8 @@ function AccommodationReviewer({ stops, onAdd }: { stops: any[]; onAdd?: (hotel:
         reviewSummary: result.summary,
         pros: result.pros,
         cons: result.cons,
-        estimatedPricePerNight: 100,
-        bookingUrl: `https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(stops[stopIndex].stopName)}`,
+        estimatedPricePerNight: result.estimatedPricePerNight || 100,
+        bookingUrl: result.bookingUrl || `https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(stops[stopIndex].stopName)}`,
         address: stops[stopIndex].stopName,
         amenities: []
       }, stopIndex);
@@ -384,7 +417,8 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
   const [selectedAccommodations, setSelectedAccommodations] = useState<Record<number, any>>({});
   const [accommodationNights, setAccommodationNights] = useState<Record<number, number>>({});
   const [selectedFlights, setSelectedFlights] = useState<Record<number, any>>({});
-  const heroUrl = getImageUrl({ imageUrl: plan.destinationOverview?.heroImageUrl }, plan.destinationOverview?.title + ' landscape');
+  const [expandedDays, setExpandedDays] = useState<Record<number, boolean>>({ 0: true });
+  const heroUrl = getImageUrl(plan.destinationOverview, plan.destinationOverview?.title + ' landscape');
 
   // Inizializza le notti e le selezioni con i valori suggeriti dal piano
   useEffect(() => {
@@ -442,7 +476,46 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
       hiddenElements.forEach(e => e.remove());
 
       // Get the full HTML string
-      const htmlContent = "<!DOCTYPE html>\n" + clone.outerHTML;
+      const toggleScript = `
+<script>
+  document.addEventListener('click', function(e) {
+    const header = e.target.closest('[data-day-header]');
+    if (header) {
+      const dayIndex = header.getAttribute('data-day-header');
+      const content = document.querySelector('[data-day-content="' + dayIndex + '"]');
+      const iconContainer = header.querySelector('.toggle-icon-container');
+      
+      if (content) {
+        const isHidden = content.style.display === 'none' || content.style.height === '0px' || content.style.opacity === '0';
+        if (isHidden) {
+          content.style.display = 'block';
+          content.style.height = 'auto';
+          content.style.opacity = '1';
+          header.classList.add('is-expanded');
+          if (iconContainer) {
+            iconContainer.style.backgroundColor = '#5a5a40';
+            iconContainer.style.borderColor = '#5a5a40';
+            iconContainer.style.color = 'white';
+            iconContainer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minus w-5 h-5"><path d="M5 12h14"/></svg>';
+          }
+        } else {
+          content.style.display = 'none';
+          content.style.height = '0px';
+          content.style.opacity = '0';
+          header.classList.remove('is-expanded');
+          if (iconContainer) {
+            iconContainer.style.backgroundColor = 'transparent';
+            iconContainer.style.borderColor = 'rgba(26, 26, 26, 0.1)';
+            iconContainer.style.color = 'inherit';
+            iconContainer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus w-5 h-5"><path d="M12 5v14M5 12h14"/></svg>';
+          }
+        }
+      }
+    }
+  });
+</script>
+`;
+      const htmlContent = "<!DOCTYPE html>\n" + clone.outerHTML + toggleScript;
       
       // Create a Blob and trigger download
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
@@ -810,103 +883,142 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
           <h2 className="text-5xl mb-2">Il tuo itinerario</h2>
           <p className="text-brand-ink/50 mb-12 font-sans text-sm">Ogni giornata pensata per vivere la destinazione in modo autentico</p>
 
-          <div className="space-y-16">
-            {(plan.itinerary || []).map((day: any, i: number) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="relative pl-8 md:pl-20"
-              >
-                <div className="absolute left-0 top-0 bottom-0 w-px bg-brand-ink/10" />
-                <div className="absolute left-[-8px] top-2 w-4 h-4 rounded-full bg-brand-accent ring-4 ring-brand-paper" />
-
-                <div className="mb-6">
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-brand-accent">
-                      Giorno {day.day}
-                    </span>
-                    {day.theme && <Badge>{day.theme}</Badge>}
+          <div className="space-y-6">
+            {(plan.itinerary || []).map((day: any, i: number) => {
+              const isExpanded = expandedDays[i];
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="bg-white rounded-[2rem] border border-brand-ink/5 overflow-hidden shadow-sm hover:shadow-md transition-all"
+                >
+                  {/* Header cliccabile */}
+                  <div 
+                    onClick={() => setExpandedDays(prev => ({ ...prev, [i]: !prev[i] }))}
+                    data-day-header={i}
+                    className="p-6 md:p-8 cursor-pointer flex items-center justify-between group"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+                      <div className="flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-full bg-brand-accent/10 text-brand-accent flex items-center justify-center text-sm font-bold shrink-0">
+                          {day.day}
+                        </span>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">Giorno</span>
+                          <h3 className="text-xl md:text-2xl font-serif leading-tight">{day.title}</h3>
+                        </div>
+                      </div>
+                      {day.theme && (
+                        <div className="md:ml-4">
+                          <Badge color="blue">{day.theme}</Badge>
+                        </div>
+                      )}
+                    </div>
+                    <div className={cn(
+                      "w-10 h-10 rounded-full border border-brand-ink/10 flex items-center justify-center transition-all group-hover:border-brand-accent group-hover:bg-brand-accent/5 toggle-icon-container",
+                      isExpanded && "bg-brand-accent border-brand-accent text-white group-hover:bg-brand-accent group-hover:text-white"
+                    )}>
+                      {isExpanded ? <Minus className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                    </div>
                   </div>
-                  <h3 className="text-4xl">{day.title}</h3>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {(day.activities || []).map((act: any, j: number) => {
-                    const searchDestination = act.location || plan.destinationOverview?.title || inputs?.destination;
-                    return (
-                    <a
-                      key={j}
-                      href={getSafeLink(act.sourceUrl, act.name || act.description, searchDestination)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={cn(
-                        "group bg-white rounded-3xl border p-6 hover:shadow-md transition-all block",
-                        act.name?.toLowerCase().includes('pernottamento') 
-                          ? "border-brand-accent/20 bg-brand-accent/5" 
-                          : "border-brand-ink/5"
-                      )}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono bg-brand-paper px-2 py-0.5 rounded-md text-brand-ink/60">{act.time}</span>
-                          {act.duration && (
-                            <span className="text-xs text-brand-ink/40 flex items-center gap-1">
-                              <Clock className="w-3 h-3" /> {act.duration}
-                            </span>
-                          )}
-                        </div>
-                        {act.name?.toLowerCase().includes('pernottamento') && (
-                          <Hotel className="w-4 h-4 text-brand-accent" />
-                        )}
-                        {act.costEstimate !== undefined && !act.name?.toLowerCase().includes('pernottamento') && (
-                          <span className="text-sm font-bold text-brand-accent">
-                            {act.costEstimate === 0 ? 'Gratis' : `€${act.costEstimate}`}
-                          </span>
-                        )}
-                      </div>
-                      {act.name && <h4 className={cn(
-                        "text-lg font-serif mb-2 leading-tight group-hover:text-brand-accent transition-colors",
-                        act.name?.toLowerCase().includes('pernottamento') && "text-brand-accent"
-                      )}>{act.name}</h4>}
-                      {act.location && (
-                        <p className="text-xs text-brand-accent mb-2 flex items-center gap-1 font-medium">
-                          <MapPin className="w-3 h-3" /> {act.location}
-                        </p>
-                      )}
-                      <p className="text-brand-ink/70 text-sm leading-relaxed">{act.description}</p>
-                      
-                      {(act.transport || act.travelTime) && (
-                        <div className="mt-4 pt-4 border-t border-brand-ink/5 flex flex-wrap gap-3">
-                          {act.transport && (
-                            <div className="flex items-center gap-1.5 text-xs text-brand-ink/50">
-                              <Train className="w-3.5 h-3.5" /> {act.transport}
-                            </div>
-                          )}
-                          {act.travelTime && (
-                            <div className="flex items-center gap-1.5 text-xs text-brand-ink/50">
-                              <Clock className="w-3.5 h-3.5" /> {act.travelTime}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                  {/* Contenuto espandibile */}
+                  <motion.div
+                    initial={false}
+                    animate={{ 
+                      height: isExpanded ? 'auto' : 0, 
+                      opacity: isExpanded ? 1 : 0,
+                      display: isExpanded ? 'block' : 'none'
+                    }}
+                    data-day-content={i}
+                    transition={{ duration: 0.3, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-6 pb-8 md:px-8 md:pb-10 border-t border-brand-ink/5 pt-8">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {(day.activities || []).map((act: any, j: number) => {
+                              const searchDestination = act.location || plan.destinationOverview?.title || inputs?.destination;
+                              return (
+                              <a
+                                key={j}
+                                href={getSafeLink(act.sourceUrl, act.name || act.description, searchDestination)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={cn(
+                                  "group bg-brand-paper/30 rounded-3xl border p-6 hover:shadow-md transition-all block",
+                                  act.name?.toLowerCase().includes('pernottamento') 
+                                    ? "border-brand-accent/20 bg-brand-accent/5" 
+                                    : "border-brand-ink/5"
+                                )}
+                              >
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono bg-white px-2 py-0.5 rounded-md text-brand-ink/60 shadow-sm">{act.time}</span>
+                                    {act.duration && (
+                                      <span className="text-xs text-brand-ink/40 flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> {act.duration}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {act.name?.toLowerCase().includes('pernottamento') && (
+                                    <Hotel className="w-4 h-4 text-brand-accent" />
+                                  )}
+                                  {act.costEstimate !== undefined && !act.name?.toLowerCase().includes('pernottamento') && (
+                                    <span className="text-sm font-bold text-brand-accent">
+                                      {act.costEstimate === 0 
+                                        ? (act.description?.toLowerCase().includes('vedi costo nella sezione voli') || act.tips?.toLowerCase().includes('vedi costo nella sezione voli')
+                                          ? 'Vedi sezione voli' 
+                                          : 'Gratis')
+                                        : `€${act.costEstimate}`}
+                                    </span>
+                                  )}
+                                </div>
+                                {act.name && <h4 className={cn(
+                                  "text-lg font-serif mb-2 leading-tight group-hover:text-brand-accent transition-colors",
+                                  act.name?.toLowerCase().includes('pernottamento') && "text-brand-accent"
+                                )}>{act.name}</h4>}
+                                {act.location && (
+                                  <p className="text-xs text-brand-accent mb-2 flex items-center gap-1 font-medium">
+                                    <MapPin className="w-3 h-3" /> {act.location}
+                                  </p>
+                                )}
+                                <p className="text-brand-ink/70 text-sm leading-relaxed">{act.description}</p>
+                                
+                                {(act.transport || act.travelTime) && (
+                                  <div className="mt-4 pt-4 border-t border-brand-ink/5 flex flex-wrap gap-3">
+                                    {act.transport && (
+                                      <div className="flex items-center gap-1.5 text-xs text-brand-ink/50">
+                                        <Train className="w-3.5 h-3.5" /> {act.transport}
+                                      </div>
+                                    )}
+                                    {act.travelTime && (
+                                      <div className="flex items-center gap-1.5 text-xs text-brand-ink/50">
+                                        <Clock className="w-3.5 h-3.5" /> {act.travelTime}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
 
-                      {act.tips && (
-                        <div className="mt-3 flex items-start gap-2 bg-amber-50 p-3 rounded-xl">
-                          <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                          <p className="text-xs text-amber-800 leading-relaxed">{act.tips}</p>
+                                {act.tips && (
+                                  <div className="mt-3 flex items-start gap-2 bg-amber-50 p-3 rounded-xl">
+                                    <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="text-xs text-amber-800 leading-relaxed">{act.tips}</p>
+                                  </div>
+                                )}
+                                <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <ExternalLink className="w-3 h-3" /> Verifica sul web
+                                </div>
+                              </a>
+                              );
+                            })}
+                          </div>
                         </div>
-                      )}
-                      <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ExternalLink className="w-3 h-3" /> Verifica sul web
-                      </div>
-                    </a>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            ))}
+                      </motion.div>
+                </motion.div>
+              );
+            })}
           </div>
         </section>
 
@@ -1171,7 +1283,22 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                         </div>
                         <div className="flex gap-2">
                           <a 
-                            href={getSafeLink(hotel.bookingUrl, hotel.name + ' hotel')} 
+                            href={(() => {
+                              // Calcola le date per la tappa specifica
+                              let currentOffset = 0;
+                              for (let k = 0; k < i; k++) {
+                                currentOffset += plan.accommodations[k].nights || 0;
+                              }
+                              const start = new Date(inputs.startDate);
+                              const stopStart = new Date(start);
+                              stopStart.setDate(start.getDate() + currentOffset);
+                              const stopEnd = new Date(stopStart);
+                              stopEnd.setDate(stopStart.getDate() + (accommodationNights[i] || 1));
+                              
+                              const formatDate = (d: Date) => d.toISOString().split('T')[0];
+                              
+                              return getBookingUrl(hotel.name, stop.stopName, formatDate(stopStart), formatDate(stopEnd), inputs.people);
+                            })()} 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             className="text-xs font-bold uppercase tracking-widest text-brand-accent hover:underline flex items-center"
@@ -1196,6 +1323,7 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
           </div>
           <AccommodationReviewer 
             stops={plan.accommodations || []}
+            inputs={inputs}
             onAdd={(hotel, stopIndex) => {
               // Aggiungi l'hotel alle opzioni della tappa selezionata
               const updatedPlan = { ...plan };
@@ -1374,7 +1502,11 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                                   <>
                                     €{actTotal} <span className="text-xs text-brand-ink/40 font-normal">(€{act.costEstimate} x {numPeople} pers.)</span>
                                   </>
-                                ) : 'Gratis / N.D.'}
+                                ) : (
+                                  (act.description?.toLowerCase().includes('vedi costo nella sezione voli') || act.tips?.toLowerCase().includes('vedi costo nella sezione voli'))
+                                    ? <span className="text-brand-accent italic text-xs">Vedi sezione voli</span>
+                                    : 'Gratis / N.D.'
+                                )}
                               </td>
                             </tr>
                           );

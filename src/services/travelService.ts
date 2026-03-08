@@ -97,11 +97,11 @@ VIAGGIO:
 - Note: ${inputs.notes || "nessuna"}
 
 REGOLE ASSOLUTE:
-1. IMMAGINI: Usa il tool Google Search SOLO per trovare un'immagine panoramica REALE e pubblica per la destinazione principale (inseriscila in \`heroImageUrl\`). NON inserire immagini per attrazioni, attività, hotel o ristoranti.
+1. IMMAGINI: Usa il tool Google Search per trovare un'immagine panoramica REALE, pubblica e ad ALTA RISOLUZIONE della destinazione principale. Inserisci l'URL diretto dell'immagine nel campo \`heroImageUrl\`. Cerca di preferire link da Wikimedia Commons, Unsplash o siti di fotografia che permettano il hotlinking. NON inserire immagini per attrazioni, attività, hotel o ristoranti.
 2. LINK: Usa SOLO URL affidabili e reali.
 3. COORDINATE E MAPPA: Ogni luogo DEVE avere lat/lng precise. Nel campo \`mapPoints\`, DEVI includere obbligatoriamente anche la città di partenza (${inputs.departureCity}) e la destinazione principale (${inputs.destination}).
 4. COSTI: Realistici. Totale non superiore a €${inputs.budget}.
-5. HOTEL E RISTORANTI REALI: Solo strutture che esistono davvero con nomi precisi. Fornisci 2 opzioni di alloggio per OGNI tappa e ALMENO 2 opzioni per i ristoranti per OGNI tappa.
+5. HOTEL E RISTORANTI REALI: Solo strutture che esistono davvero con nomi precisi. DEVI verificare l'effettiva DISPONIBILITÀ, lo STATO di apertura (NON proporre strutture "temporaneamente chiuse" su Google) e i prezzi reali per notte su Booking.com o TripAdvisor per le date specifiche di ogni tappa. Se una struttura non è disponibile o chiusa, proponine un'altra valida. Fornisci 2 opzioni di alloggio per OGNI tappa e ALMENO 2 opzioni per i ristoranti per OGNI tappa.
 6. ITALIANO CORRETTO: Grammatica italiana perfetta.
 7. VELOCITÀ: Sii conciso nelle descrizioni.
 
@@ -121,21 +121,21 @@ Per ogni singola attività (inclusi i pasti) devi specificare l'orario esatto, l
 
 9. METEO (CLIMA E VIAGGI): Per la sezione "weatherInfo", DEVI cercare su Google "clima e viaggi ${inputs.destination}" ed estrarre le informazioni ESATTE da quel sito per il mese del viaggio. Riassumi le temperature, il clima, i pro e i contro basandoti esclusivamente su quella fonte.
 
-10. VOLI: Se l'itinerario prevede più voli (es. stopover, voli interni, multi-tratta), DEVI coprire l'INTERO viaggio assicurandoti che l'utente possa SEMPRE ritornare alla città di partenza (${inputs.departureCity}). Per ogni segmento di volo (es. 'Volo 1: Milano - Lisbona', 'Volo 2: Lisbona - Boa Vista'), fornisci i dettagli di ANDATA e, se l'itinerario prevede il ritorno in quella città, anche del RITORNO. Se l'itinerario è circolare o multi-tappa senza ritorni intermedi, usa voli 'Solo andata' per ogni tratta fino al rientro finale a ${inputs.departureCity}. Esempio: se fai Milano-Lisbona-Boa Vista-Milano, puoi presentare 3 voli solo andata oppure 2 voli andata/ritorno se la logica lo consente (es. MIL-LIS A/R e LIS-BVC A/R). Scegli la struttura più logica per l'itinerario proposto. Ogni segmento DEVE avere almeno 2 alternative reali. Per ogni opzione di volo DEVI specificare obbligatoriamente la DATA prevista del volo nel campo \`date\` (formato DD/MM/YYYY). Il link \`bookingUrl\` DEVE ESSERE il link diretto al sito ufficiale della compagnia aerea specifica (es. https://www.ita-airways.com, https://www.flytap.com, https://www.ryanair.com, etc.) e NON a Google Flights o altri aggregatori. Tieni conto dell'orario di partenza preferito (${inputs.departureTimePreference}) se specificato.
+10. VOLI: Se l'itinerario prevede più voli (es. stopover, voli interni, multi-tratta), DEVI coprire l'INTERO viaggio assicurandoti che l'utente possa SEMPRE ritornare alla città di partenza (${inputs.departureCity}). Per ogni segmento di volo (es. 'Volo 1: Milano - Lisbona', 'Volo 2: Lisbona - Boa Vista'), fornisci i dettagli di ANDATA e, se l'itinerario prevede il ritorno in quella città, anche del RITORNO. Se l'itinerario è circolare o multi-tappa senza ritorni intermedi, usa voli 'Solo andata' per ogni tratta fino al rientro finale a ${inputs.departureCity}. Esempio: se fai Milano-Lisbona-Boa Vista-Milano, puoi presentare 3 voli solo andata oppure 2 voli andata/ritorno se la logica lo consente (es. MIL-LIS A/R e LIS-BVC A/R). Scegli la struttura più logica per l'itinerario proposto. Ogni segmento DEVE avere ESATTAMENTE 1 opzione reale (la migliore per rapporto qualità/prezzo). Per l'opzione di volo DEVI specificare obbligatoriamente la DATA prevista del volo nel campo "date" (formato DD/MM/YYYY). DEVI VERIFICARE gli ORARI ESATTI e i GIORNI DI OPERATIVITÀ sul sito della compagnia aerea scelta per quel giorno specifico (es. TAP Portugal vola su Boa Vista SOLO il Martedì e il Sabato). Se non ci sono voli nei giorni richiesti, DEVI modificare l'itinerario aggiungendo uno stopover o cambiando le date e spiegare chiaramente la modifica nel campo "budgetWarning" (es. "Ho aggiunto un giorno di stopover a Lisbona perché il volo TAP per Boa Vista opera solo il Martedì e il Sabato"). Il link "bookingUrl" DEVE ESSERE il link diretto al sito ufficiale della compagnia aerea specifica (es. https://www.ita-airways.com, https://www.flytap.com, https://www.ryanair.com, etc.) e NON a Google Flights o altri aggregatori. Tieni conto dell'orario di partenza preferito (${inputs.departureTimePreference}) se specificato.
 
-11. ALLOGGI E NOTTI: Per ogni tappa in "accommodations", DEVI specificare il numero di notti ("nights") che hai stimato per quella tappa. ATTENZIONE: La somma totale delle notti in hotel + le eventuali notti in volo (es. volo notturno) DEVE COINCIDERE ESATTAMENTE con il numero di notti del periodo specificato (${totalDays - 1} notti totali). Deve essere chiarissimo dove l'utente pernotta ogni singola notte del viaggio. Per questo motivo, OGNI GIORNO dell'itinerario (tranne l'ultimo se si rientra in giornata) DEVE terminare con un'attività chiamata "Pernottamento: [Nome Hotel]" (es. "Pernottamento: Hotel Ritz"). Il nome dell'hotel deve essere reale e specifico. Nella sezione "accommodations", DEVI inserire come UNICA opzione per ogni tappa proprio l'hotel che hai scelto per il pernottamento nell'itinerario giornaliero di quella tappa. Se si ipotizza di stare più notti nella stessa tappa, l'hotel resta lo stesso.
+11. ALLOGGI E NOTTI: Per ogni tappa in "accommodations", DEVI specificare il numero di notti ("nights") che hai stimato per quella tappa. ATTENZIONE: La somma totale delle notti in hotel + le eventuali notti in volo (es. volo notturno) DEVE COINCIDERE ESATTAMENTE con il numero di notti del periodo specificato (${totalDays - 1} notti totali). Deve essere chiarissimo dove l'utente pernotta ogni singola notte del viaggio. Per questo motivo, OGNI GIORNO dell'itinerario (tranne l'ultimo se si rientra in giornata) DEVE terminare con un'attività chiamata "Pernottamento: [Nome Hotel]" (es. "Pernottamento: Hotel Ritz"). Il nome dell'hotel deve essere reale e specifico. Nella sezione "accommodations", DEVI inserire come UNICA opzione per ogni tappa proprio l'hotel che hai scelto per il pernottamento nell'itinerario giornaliero di quella tappa. Se si ipotizza di stare più notti nella stessa tappa, l'hotel resta lo stesso. I PREZZI e la DISPONIBILITÀ degli alloggi devono essere VERIFICATI e REALI per le date esatte di ogni tappa, usando come riferimento Booking.com o TripAdvisor. DEVI assicurarti che la struttura sia APERTA e operativa (verifica lo stato su Google). Se l'hotel scelto non è disponibile o risulta chiuso per quelle date, DEVI cercarne e proporne uno alternativo che sia aperto e disponibile.
 
-12. COSTI: I costi di voli, treni e attività devono essere indicati PER PERSONA. Il costo degli hotel deve essere indicato PER CAMERA a notte. Il budget totale ("budgetBreakdown") deve tenere conto del numero di persone (${inputs.people.adults} adulti e ${inputs.people.children.length} bambini). IMPORTANTE: Se inserisci il volo come attività nell'itinerario giornaliero (es. "Volo di andata"), DEVI impostare il suo "costEstimate" a 0 in quella specifica attività. Il costo reale del volo deve essere valorizzato ESCLUSIVAMENTE nella sezione finale "flights" e nel "budgetBreakdown" per evitare che venga conteggiato due volte.
+12. COSTI: I costi di voli, treni e attività devono essere indicati PER PERSONA. Il costo degli hotel deve essere indicato PER CAMERA a notte. Il budget totale ("budgetBreakdown") deve tenere conto del numero di persone (${inputs.people.adults} adulti e ${inputs.people.children.length} bambini). IMPORTANTE: Se inserisci il volo come attività nell'itinerario giornaliero (es. "Volo di andata"), DEVI impostare il suo "costEstimate" a 0 e nel campo "tips" o "description" DEVI scrivere ESATTAMENTE "vedi costo nella sezione voli". Il costo reale del volo deve essere valorizzato ESCLUSIVAMENTE nella sezione finale "flights" e nel "budgetBreakdown" per evitare che venga conteggiato due volte.
 
 13. LUOGO ATTIVITÀ: Per ogni attività nell'itinerario, DEVI specificare il luogo esatto ("location") in cui si svolge (es. "Milano", "Roma", "Parigi").
 
 14. BREVITÀ ESTREMA (CRITICO): Per evitare errori di troncamento del JSON:
-- Mantieni TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) a MASSIMO 5 parole. Sii telegrafico.
+- Mantieni TUTTE le descrizioni (description, summary, reviewSummary, pros, cons) a MASSIMO 3 parole. Sii telegrafico.
 - Limita le "attractions" a massimo 2.
 - Limita i "travelBlogs" a massimo 1.
 - Limita i "localTips" a massimo 2.
 - Ometti i campi "sourceUrl", "imageUrl", "lat" e "lng" per le attività dell'itinerario.
-- Se il viaggio supera i 4 giorni: riduci le attività giornaliere a 3 (Mattina, Pomeriggio, Sera) accorpando i pasti; ometti i ristoranti dall'itinerario giornaliero; ometti "sourceUrl" dai ristoranti e "bookingUrl" dagli hotel.
+- Se il viaggio supera i 3 giorni: riduci le attività giornaliere a 2 (Mattina, Sera) accorpando i pasti; ometti i ristoranti dall'itinerario giornaliero; ometti "sourceUrl" dai ristoranti e "bookingUrl" dagli hotel.
 - Non aggiungere mai commenti o testo extra fuori dal JSON.
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
@@ -342,7 +342,7 @@ Restituisci SOLO il JSON aggiornato.
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: prompt + "\n\nIMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere testo prima o dopo il JSON. Non usare blocchi di codice markdown (```json). NON inserire citazioni o riferimenti bibliografici nel testo.",
+      contents: prompt + "\n\nIMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere testo prima o dopo il JSON. Non usare blocchi di codice markdown (```json). NON inserire citazioni o riferimenti bibliografici nel testo. NON spiegare il tuo ragionamento, non fare preamboli, non fare commenti finali. Restituisci SOLO il JSON.",
       config: {
         temperature: 0.1,
         tools: [{ googleSearch: {} }],
@@ -352,25 +352,38 @@ Restituisci SOLO il JSON aggiornato.
     onProgress?.("Elaborazione dati ricevuti...", 85);
     let text = response.text || "";
     
-    // Rimuovi eventuali blocchi markdown se presenti nonostante il responseMimeType
-    text = text.replace(/^```json\s*/, "").replace(/```$/, "").trim();
+    // Pulizia robusta del testo: estraiamo solo la parte tra il primo { e l'ultimo }
+    const jsonStartIdx = text.indexOf("{");
+    const jsonEndIdx = text.lastIndexOf("}");
+    
+    if (jsonStartIdx === -1 || jsonEndIdx === -1) {
+      console.error("Nessun JSON trovato nel testo ricevuto:", text);
+      throw new Error("L'AI non ha restituito un piano di viaggio valido. Riprova.");
+    }
+
+    let jsonText = text.substring(jsonStartIdx, jsonEndIdx + 1);
     
     let json;
     try {
-      json = JSON.parse(text);
+      json = JSON.parse(jsonText);
     } catch (e) {
-      console.error("Errore parsing JSON AI. Testo ricevuto:", text);
-      // Tentativo estremo: cerca di estrarre il primo { e l'ultimo }
+      console.error("Errore parsing JSON AI. Testo estratto:", jsonText);
+      
+      // Tentativo di riparazione per JSON troncato
       try {
-        const start = text.indexOf("{");
-        const end = text.lastIndexOf("}");
-        if (start !== -1 && end !== -1) {
-          json = JSON.parse(text.substring(start, end + 1));
-        } else {
-          throw e;
-        }
+        let fixedText = jsonText;
+        const openBraces = (fixedText.match(/\{/g) || []).length;
+        const closeBraces = (fixedText.match(/\}/g) || []).length;
+        const openBrackets = (fixedText.match(/\[/g) || []).length;
+        const closeBrackets = (fixedText.match(/\]/g) || []).length;
+        
+        // Se mancano chiusure, proviamo a chiudere gli array e gli oggetti aperti
+        if (openBrackets > closeBrackets) fixedText += ' ]'.repeat(openBrackets - closeBrackets);
+        if (openBraces > closeBraces) fixedText += ' }'.repeat(openBraces - closeBraces);
+        
+        json = JSON.parse(fixedText);
       } catch (e2) {
-        throw new Error("L'AI non ha restituito un JSON valido. Riprova.");
+        throw new Error("L'AI ha interrotto la generazione dell'itinerario perché troppo lungo. Prova a ridurre la durata del viaggio o a essere più specifico nelle note.");
       }
     }
     
@@ -437,7 +450,7 @@ Restituisci SOLO un array JSON di stringhe con i nomi delle nazioni in italiano.
   }
 };
 
-export const summarizeAccommodationReviews = async (name: string, city: string) => {
+export const summarizeAccommodationReviews = async (name: string, city: string, startDate: string, endDate: string, people: { adults: number, children: { age: number }[] }) => {
   let apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     if (process.env.API_KEY && process.env.API_KEY.length > 20) {
@@ -450,19 +463,27 @@ export const summarizeAccommodationReviews = async (name: string, city: string) 
 
   const ai = new GoogleGenAI({ apiKey });
 
+  const totalPeople = people.adults + people.children.length;
   const prompt = `
-Sei un assistente di viaggio esperto. Cerca informazioni e recensioni per l'alloggio "${name}" a "${city}" su siti come Booking.com e TripAdvisor.
+Sei un assistente di viaggio esperto. Cerca informazioni, recensioni e PREZZI REALI per l'alloggio "${name}" a "${city}" su siti come Booking.com e TripAdvisor.
 Verifica se l'alloggio esiste davvero in quella città.
+
+DETTAGLI VIAGGIO:
+- Date: ${startDate} -> ${endDate}
+- Persone: ${people.adults} adulti, ${people.children.length} bambini (età: ${people.children.map(c => c.age).join(', ') || 'N/A'})
 
 Restituisci SOLO JSON valido (zero markdown, zero commenti) con questa struttura esatta:
 {
   "exists": true,
   "summary": "Riassunto delle recensioni (circa 3-4 frasi)",
   "pros": ["Pro 1", "Pro 2"],
-  "cons": ["Contro 1", "Contro 2"]
+  "cons": ["Contro 1", "Contro 2"],
+  "estimatedPricePerNight": 150,
+  "bookingUrl": "URL DI RICERCA DIRETTO SU BOOKING.COM PER LE DATE E PERSONE INDICATE"
 }
 
 Se l'alloggio NON esiste a "${city}", imposta "exists": false e lascia gli altri campi vuoti o con un messaggio di errore nel "summary".
+Il prezzo "estimatedPricePerNight" deve essere il costo REALE PER NOTTE per TUTTE le ${totalPeople} persone (quindi il costo della camera/e necessarie) per il periodo indicato.
 `;
 
   const response = await ai.models.generateContent({
@@ -475,22 +496,37 @@ Se l'alloggio NON esiste a "${city}", imposta "exists": false e lascia gli altri
   });
 
   let text = response.text || "";
-  // Rimuovi eventuali blocchi markdown
-  text = text.replace(/^```json\s*/, "").replace(/```$/, "").trim();
+  
+  // Pulizia robusta del testo: estraiamo solo la parte tra il primo { e l'ultimo }
+  const jsonStartIdx = text.indexOf("{");
+  const jsonEndIdx = text.lastIndexOf("}");
+  
+  if (jsonStartIdx === -1 || jsonEndIdx === -1) {
+    console.error("Nessun JSON trovato nelle recensioni:", text);
+    throw new Error("L'AI non ha restituito recensioni valide.");
+  }
+
+  let jsonText = text.substring(jsonStartIdx, jsonEndIdx + 1);
   
   try {
-    return JSON.parse(text);
+    return JSON.parse(jsonText);
   } catch (e) {
-    // Tentativo estremo: cerca di estrarre il primo { e l'ultimo }
+    console.error("Errore parsing JSON recensioni. Testo estratto:", jsonText);
+    
+    // Tentativo di riparazione per JSON troncato
     try {
-      const start = text.indexOf("{");
-      const end = text.lastIndexOf("}");
-      if (start !== -1 && end !== -1) {
-        return JSON.parse(text.substring(start, end + 1));
-      }
+      let fixedText = jsonText;
+      const openBraces = (fixedText.match(/\{/g) || []).length;
+      const closeBraces = (fixedText.match(/\}/g) || []).length;
+      const openBrackets = (fixedText.match(/\[/g) || []).length;
+      const closeBrackets = (fixedText.match(/\]/g) || []).length;
+      
+      if (openBrackets > closeBrackets) fixedText += ' ]'.repeat(openBrackets - closeBrackets);
+      if (openBraces > closeBraces) fixedText += ' }'.repeat(openBraces - closeBraces);
+      
+      return JSON.parse(fixedText);
     } catch (e2) {
-      console.error("Errore parsing JSON recensioni:", text);
+      throw new Error("L'AI non ha restituito un JSON valido per le recensioni.");
     }
-    throw new Error("L'AI non ha restituito un JSON valido per le recensioni.");
   }
 };
