@@ -50,7 +50,8 @@ function extractText(content: Anthropic.ContentBlock[]): string {
   return block?.text ?? "";
 }
 
-function repairJson(jsonText: string): unknown {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function repairJson(jsonText: string): any {
   try {
     return JSON.parse(jsonText);
   } catch {
@@ -237,7 +238,8 @@ Restituisci SOLO il JSON aggiornato.
       model: "claude-opus-4-6",
       max_tokens: 16000,
       thinking: { type: "enabled", budget_tokens: 8000 },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }] as any,
       messages: [
         {
           role: "user",
@@ -400,7 +402,8 @@ IMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere tes
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] as any,
     messages: [{ role: "user", content: prompt }],
   });
 
