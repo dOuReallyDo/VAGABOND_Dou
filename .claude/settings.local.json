@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/roberta/.nvm/versions/**)",
+      "Read(//opt/homebrew/Cellar/node@20/20.20.0/bin/**)",
+      "Bash(/opt/homebrew/bin/npm install)",
+      "Bash(/opt/homebrew/bin/node --version)",
+      "Read(//opt/homebrew/opt/**)",
+      "Bash(/opt/homebrew/opt/node.js/bin/npm install)",
+      "Bash(PATH=\"/opt/homebrew/opt/node.js/bin:/opt/homebrew/bin:$PATH\" node --version)",
+      "Bash(PATH=\"/opt/homebrew/opt/node.js/bin:/opt/homebrew/bin:$PATH\" npm install)"
+    ]
+  }
+}

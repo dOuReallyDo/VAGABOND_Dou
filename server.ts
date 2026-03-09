@@ -16,12 +16,12 @@ app.use(express.json());
 
 // 1. API Routes (Always available)
 app.get("/api/config", (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.API_KEY || "";
   res.json({ apiKey });
 });
 
 app.get("/api/health", (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.API_KEY || "";
   res.json({ 
     status: "ok", 
     env: process.env.NODE_ENV || "development",
