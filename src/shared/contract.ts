@@ -170,6 +170,13 @@ export const TravelPlanSchema = z.object({
     localTransport: z.string().optional(),
     bestApps: z.array(z.string()).optional(),
     estimatedLocalCost: z.string().optional(),
+    privateTransferLinks: z.array(
+      z.object({
+        provider: z.string(),
+        url: z.string(),
+        description: z.string().optional(),
+      })
+    ).optional(),
   }).optional(),
   travelBlogs: z.array(
     z.object({

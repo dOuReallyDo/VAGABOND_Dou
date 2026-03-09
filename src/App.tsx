@@ -1449,6 +1449,30 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                     Costo locale stimato: <strong>{plan.transportInfo.estimatedLocalCost}</strong>
                   </p>
                 )}
+                {plan.transportInfo.privateTransferLinks && plan.transportInfo.privateTransferLinks.length > 0 && (
+                  <div className="mt-6 border-t border-brand-ink/5 pt-6">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40 mb-3 flex items-center gap-2">
+                      <Users className="w-3 h-3" /> Trasferimenti privati
+                    </p>
+                    <div className="space-y-3">
+                      {plan.transportInfo.privateTransferLinks.map((link: any, i: number) => (
+                        <a
+                          key={i}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-3 bg-brand-paper rounded-xl hover:bg-brand-ink/5 transition-colors group"
+                        >
+                          <div>
+                            <p className="text-sm font-bold text-brand-ink group-hover:text-brand-accent transition-colors">{link.provider}</p>
+                            {link.description && <p className="text-[10px] text-brand-ink/50">{link.description}</p>}
+                          </div>
+                          <ExternalLink className="w-4 h-4 text-brand-ink/20 group-hover:text-brand-accent transition-colors" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>
