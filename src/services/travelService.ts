@@ -235,11 +235,10 @@ Restituisci SOLO il JSON aggiornato.
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
     const response = await client.messages.create({
-      model: "claude-opus-4-6",
-      max_tokens: 16000,
-      thinking: { type: "enabled", budget_tokens: 8000 },
+      model: "claude-sonnet-4-6",
+      max_tokens: 12000,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }] as any,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }] as any,
       messages: [
         {
           role: "user",
@@ -314,7 +313,7 @@ Restituisci SOLO il JSON aggiornato.
 
     const validationResult = TravelPlanSchema.safeParse(json);
     if (!validationResult.success) {
-      console.error("Validation Error:", validationResult.error);
+      console.error("Validation Errors:", JSON.stringify(validationResult.error.issues, null, 2));
       throw new Error("Il piano generato non rispetta il formato richiesto. Riprova.");
     }
 
@@ -400,10 +399,10 @@ IMPORTANTE: Restituisci esclusivamente un oggetto JSON valido. Non includere tes
 `;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 1024,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] as any,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }] as any,
     messages: [{ role: "user", content: prompt }],
   });
 

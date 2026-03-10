@@ -1,1 +1,1 @@
-{"root":["./server.ts","./vite.config.ts","./api/config.ts","./src/app.tsx","./src/main.tsx","./src/types.ts","./src/components/travelmap.tsx","./src/services/travelservice.ts","./src/shared/contract.ts"],"version":"5.9.3"}
+{"root":["./server.ts","./vite.config.ts","./api/config.ts","./dist/assets/leaflet-src-7nh8i6d1.js","./dist/assets/main-5anukhn0.js","./src/app.tsx","./src/main.tsx","./src/types.ts","./src/components/travelmap.tsx","./src/services/travelservice.ts","./src/shared/contract.ts"],"version":"5.9.3"}

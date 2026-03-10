@@ -39,7 +39,7 @@ async function setupApp() {
   if (isProd) {
     console.log(`[PROD] Serving static files from: ${distPath}`);
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("/{*path}", (req, res) => {
       const indexPath = path.join(distPath, "index.html");
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
