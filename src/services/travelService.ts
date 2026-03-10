@@ -121,12 +121,15 @@ DETTAGLI VIAGGIO:
 - Budget: €${inputs.budget} per ${totalPeople} persone
 - Note: ${inputs.notes || "nessuna"}
 
-REGOLE DI FORMATO:
-- Immagini: Usa la ricerca web per una heroImageUrl panoramica reale.
-- Coordinate: Lat/Lng precise per ogni luogo.
-- Hotel/Ristoranti: Solo strutture reali, aperte e verificate su Booking/TripAdvisor.
-- Brevità: Descrizioni di massimo 5 parole. Sii telegrafico per evitare troncamenti.
-- JSON: Restituisci SOLO il JSON senza commenti o markdown.
+REGOLE DI FORMATO (CRITICHE PER EVITARE TRONCAMENTI):
+- Brevità ASSOLUTA: ogni stringa di testo MAX 5 parole. Niente frasi complete.
+- Attività per giorno: MAX 4 attività (mattina, pranzo, pomeriggio, sera).
+- Attrazioni: MAX 3 elementi.
+- Ristoranti per tappa: MAX 2 opzioni.
+- Hotel per tappa: MAX 1 opzione.
+- Voli: MAX 1 opzione per segmento.
+- localTips: MAX 3 elementi.
+- JSON: SOLO il JSON, zero markdown, zero commenti.
 
 ITINERARIO GIORNALIERO:
 ${dateList}
@@ -236,7 +239,7 @@ Restituisci SOLO il JSON aggiornato.
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 12000,
+      max_tokens: 16000,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }] as any,
       messages: [

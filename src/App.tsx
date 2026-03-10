@@ -1701,6 +1701,15 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (inputs.startDate && inputs.endDate) {
+      const nights = Math.round(
+        (new Date(inputs.endDate).getTime() - new Date(inputs.startDate).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (nights > 15) {
+        alert("Per il momento Vagabond può generare itinerari di massimo 15 giorni. Seleziona un periodo più breve.");
+        return;
+      }
+    }
     const finalInputs = { ...inputs, budget: parseInt(inputs.budgetInput) || 0 };
     onSubmit(finalInputs);
   };
@@ -1899,6 +1908,14 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                         value={inputs.endDate} onChange={(e) => setInputs((p) => ({ ...p, endDate: e.target.value }))} />
                     </div>
                   </div>
+                  {inputs.startDate && inputs.endDate && (() => {
+                    const nights = Math.round((new Date(inputs.endDate).getTime() - new Date(inputs.startDate).getTime()) / (1000 * 60 * 60 * 24));
+                    return nights > 0 ? (
+                      <p className={`text-xs mt-1 ${nights > 15 ? 'text-red-500 font-semibold' : 'text-brand-ink/40'}`}>
+                        {nights} {nights === 1 ? 'notte' : 'notti'}{nights > 15 ? ' — massimo 15 notti consentite' : ''}
+                      </p>
+                    ) : null;
+                  })()}
                   <label className="flex items-center gap-3 cursor-pointer group mt-2">
                     <div className="relative">
                       <input type="checkbox" className="sr-only" checked={inputs.isPeriodFlexible}
