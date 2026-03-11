@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Euro, MapPin, Calendar, Home, MessageSquare, Plane, Hotel,
@@ -85,7 +85,63 @@ const getSafeLink = (url: string | undefined, name: string, destination?: string
 
 // ─── LOADING SCREEN ─────────────────────────────────────────────────────────
 
+const LOADING_TIPS = [
+  'Consultando orari voli e tariffe reali...',
+  'Verificando disponibilità alloggi...',
+  'Componendo il programma giorno per giorno...',
+  'Cercando ristoranti e attrazioni locali...',
+  'Calcolando il budget di viaggio...',
+  'Raccogliendo consigli pratici di viaggio...',
+  'Ottimizzando percorsi e trasferimenti...',
+  'Quasi pronto — sto rifinendo i dettagli...',
+];
+
 function LoadingScreen({ step, progress }: { step: string; progress: number }) {
+  const startTimeRef = useRef(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(progress);
+  const [tipIndex, setTipIndex] = useState(0);
+
+  // Contatore secondi trascorsi
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Rotazione messaggi ogni 4s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTipIndex(i => (i + 1) % LOADING_TIPS.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Avanza la barra lentamente tra 45% e 80% mentre l'API risponde
+  useEffect(() => {
+    if (progress > displayProgress) {
+      setDisplayProgress(progress);
+      return;
+    }
+    if (progress === 45 && displayProgress < 80) {
+      const timeout = setTimeout(() => {
+        setDisplayProgress(prev => Math.min(prev + 0.4, 80));
+      }, 700);
+      return () => clearTimeout(timeout);
+    }
+  }, [progress, displayProgress]);
+
+  const estimatedTotal = 90; // secondi stimati totali
+  const remaining = Math.max(0, estimatedTotal - elapsed);
+  const remainingMin = Math.floor(remaining / 60);
+  const remainingSec = remaining % 60;
+  const timeLabel = remaining > 60
+    ? `~${remainingMin} min ${remainingSec}s`
+    : remaining > 0
+      ? `~${remainingSec}s`
+      : 'Quasi finito...';
+
   return (
     <div className="min-h-screen bg-brand-paper flex flex-col items-center justify-center p-6">
       <motion.div
@@ -102,6 +158,7 @@ function LoadingScreen({ step, progress }: { step: string; progress: number }) {
           </div>
         </div>
 
+        {/* Fase corrente (dal service) */}
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -110,38 +167,62 @@ function LoadingScreen({ step, progress }: { step: string; progress: number }) {
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.35 }}
           >
-            <h2 className="text-2xl mb-2">{step || 'Pianifico il tuo viaggio...'}</h2>
-            <p className="text-brand-ink/50 text-sm font-sans italic mb-8">Vagabond AI sta cercando le migliori opzioni per te</p>
+            <h2 className="text-2xl mb-1">{step || 'Pianifico il tuo viaggio...'}</h2>
           </motion.div>
         </AnimatePresence>
 
+        {/* Messaggio rotativo */}
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={tipIndex}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4 }}
+            className="text-brand-ink/50 text-sm font-sans italic mb-8 h-5"
+          >
+            {LOADING_TIPS[tipIndex]}
+          </motion.p>
+        </AnimatePresence>
+
         {/* Barra di avanzamento */}
-        <div className="w-full bg-brand-ink/5 h-3 rounded-full overflow-hidden mb-4 relative">
-          <motion.div 
-            className="absolute inset-y-0 left-0 bg-brand-accent"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.5 }}
+        <div className="w-full bg-brand-ink/5 h-3 rounded-full overflow-hidden mb-3 relative">
+          <motion.div
+            className="absolute inset-y-0 left-0 bg-brand-accent rounded-full"
+            animate={{ width: `${displayProgress}%` }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
           />
         </div>
-        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-brand-ink/40">
-          <span>Progresso</span>
-          <span>{progress}%</span>
+        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-brand-ink/40 mb-8">
+          <span>{Math.round(displayProgress)}%</span>
+          <span className="tabular-nums">{timeLabel}</span>
         </div>
 
-        <div className="mt-12 flex justify-center gap-2">
+        {/* Step visivi */}
+        <div className="flex items-center justify-center gap-2 text-xs text-brand-ink/40 font-sans mb-8">
+          {['Analisi', 'Ricerca', 'Composizione', 'Pronto'].map((label, i) => {
+            const thresholds = [10, 30, 45, 85];
+            const active = displayProgress >= thresholds[i];
+            return (
+              <React.Fragment key={label}>
+                <div className={cn('flex flex-col items-center gap-1 transition-all', active ? 'text-brand-accent font-bold' : '')}>
+                  <div className={cn('w-2.5 h-2.5 rounded-full border-2 transition-all',
+                    active ? 'bg-brand-accent border-brand-accent' : 'border-brand-ink/20'
+                  )} />
+                  <span>{label}</span>
+                </div>
+                {i < 3 && <div className={cn('w-8 h-0.5 mb-4 transition-all', active ? 'bg-brand-accent/40' : 'bg-brand-ink/10')} />}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        <div className="flex justify-center gap-2">
           {[0, 1, 2].map((i) => (
             <motion.div
               key={i}
-              animate={{
-                scale: [1, 1.5, 1],
-                opacity: [0.3, 1, 0.3],
-              }}
-              transition={{
-                duration: 1,
-                repeat: Infinity,
-                delay: i * 0.2,
-              }}
+              animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
+              transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
               className="w-2 h-2 bg-brand-accent rounded-full"
             />
           ))}
@@ -459,23 +540,67 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
     ),
   ].filter((p: any) => p.lat && p.lng && p.lat !== 0 && p.lng !== 0 && !isNaN(p.lat) && !isNaN(p.lng));
 
-  const handleSaveItinerary = () => {
+  const handleSaveItinerary = async () => {
     const element = document.getElementById('pdf-content');
     if (!element) return;
-    
+
     try {
       // Clone the document to modify it for saving
       const clone = document.documentElement.cloneNode(true) as HTMLElement;
-      
+
       // Remove scripts to prevent React hydration issues when opening the static HTML
       const scripts = clone.querySelectorAll('script');
       scripts.forEach(s => s.remove());
-      
+
       // Remove UI elements that shouldn't be in the saved file (like buttons)
       const hiddenElements = clone.querySelectorAll('.print\\:hidden');
       hiddenElements.forEach(e => e.remove());
 
-      // Get the full HTML string
+      // Espandi tutti i giorni dell'itinerario nel clone (rimuovi display:none inline da framer-motion)
+      const dayContents = clone.querySelectorAll('[data-day-content]');
+      dayContents.forEach((el: Element) => {
+        const htmlEl = el as HTMLElement;
+        htmlEl.style.display = 'block';
+        htmlEl.style.height = 'auto';
+        htmlEl.style.opacity = '1';
+        // Aggiorna anche l'icona nel header corrispondente
+        const dayIndex = htmlEl.getAttribute('data-day-content');
+        if (dayIndex !== null) {
+          const header = clone.querySelector(`[data-day-header="${dayIndex}"]`);
+          if (header) {
+            const iconContainer = header.querySelector('.toggle-icon-container') as HTMLElement | null;
+            if (iconContainer) {
+              iconContainer.style.backgroundColor = '#5a5a40';
+              iconContainer.style.borderColor = '#5a5a40';
+              iconContainer.style.color = 'white';
+              iconContainer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>';
+            }
+          }
+        }
+      });
+
+      // Inline tutti i CSS esterni per rendere il file auto-contenuto
+      const liveLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
+      const cloneLinks = Array.from(clone.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
+
+      await Promise.all(liveLinks.map(async (liveLink, i) => {
+        const cloneLink = cloneLinks[i];
+        if (!cloneLink) return;
+        try {
+          const res = await fetch(liveLink.href);
+          if (res.ok) {
+            const cssText = await res.text();
+            const style = document.createElement('style');
+            style.textContent = cssText;
+            cloneLink.parentNode?.replaceChild(style, cloneLink);
+          }
+        } catch {
+          // Se il fetch fallisce (es. Google Fonts), lascia il link originale con URL assoluto
+          cloneLink.href = liveLink.href;
+        }
+      }));
+
+      // Aggiungi script per toggle manuale dei giorni nel file salvato
       const toggleScript = `
 <script>
   document.addEventListener('click', function(e) {
@@ -484,7 +609,7 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
       const dayIndex = header.getAttribute('data-day-header');
       const content = document.querySelector('[data-day-content="' + dayIndex + '"]');
       const iconContainer = header.querySelector('.toggle-icon-container');
-      
+
       if (content) {
         const isHidden = content.style.display === 'none' || content.style.height === '0px' || content.style.opacity === '0';
         if (isHidden) {
@@ -516,11 +641,11 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
 </script>
 `;
       const htmlContent = "<!DOCTYPE html>\n" + clone.outerHTML + toggleScript;
-      
+
       // Create a Blob and trigger download
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
-      
+
       const link = document.createElement('a');
       link.href = url;
       link.download = `itinerario-${plan.destinationOverview?.title?.toLowerCase().replace(/\s+/g, '-') || 'viaggio'}.html`;
