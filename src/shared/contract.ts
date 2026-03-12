@@ -111,6 +111,7 @@ export const TravelPlanSchema = z.object({
           returnDuration: z.string().optional().nullable(),
           type: z.string().optional(),
           bookingUrl: z.string().optional(),
+          verified: z.boolean().optional(),
         })
       )
     })

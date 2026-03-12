@@ -105,21 +105,55 @@ export const generateTravelPlan = async (
 Sei un esperto agente di viaggi con profonda conoscenza locale. Il tuo obiettivo è pianificare un viaggio REALE, FATTIBILE e CONCRETO.
 
 REGOLE CRITICHE PER VOLI E LOGISTICA:
-1. VERIFICA VOLI (OBBLIGATORIO): Usa la ricerca web per verificare gli orari REALI dei voli su Google Flights per le date richieste.
-   - Se la destinazione è Capo Verde (Boa Vista, Sal, etc.) e non ci sono voli diretti dalla città di partenza (${inputs.departureCity}), DEVI obbligatoriamente inserire uno STOPOVER (es. a Lisbona con TAP) e prevedere una notte di pernottamento nello scalo se la coincidenza è scomoda o l'arrivo è tardi.
-   - NON inventare orari. Se non trovi voli, cambia le date o aggiungi tappe intermedie e spiegalo nel campo "budgetWarning".
-   - Ogni segmento di volo deve avere orari precisi (es. 10:30) e il link al sito ufficiale della compagnia.
+1. VERIFICA VOLI:
+   a) Usa la ricerca web per confermare QUALI COMPAGNIE AEREE operano realmente ogni tratta (es. "chi vola Milano Lisbona", "voli Lisbona Boa Vista compagnie"). Cerca usando i codici IATA: MXP/LIN per Milano, LIS per Lisbona, BVC per Boa Vista, ecc.
+   b) NON inventare orari di partenza/arrivo specifici — gli orari cambiano continuamente e non puoi verificarli. Imposta SEMPRE departureTime e arrivalTime a null.
+   c) Per "estimatedPrice" usa una stima realistica basata su range storici per quella rotta. Il costo TOTALE dei voli (estimatedPrice × ${totalPeople} persone) NON deve superare il 40% del budget totale (€${inputs.budget}), quindi max €${Math.round(inputs.budget * 0.4)} per tutti i voli. Se le compagnie principali superano questo limite, proponi alternative più economiche (low-cost, scali, date vicine). Se è impossibile restare nel budget segnalalo nel budgetWarning.
+   d) Per "bookingUrl" usa il link al sito ufficiale della compagnia aerea che proponi (es. https://www.tap.pt per TAP, https://www.ryanair.com per Ryanair, https://www.easyjet.com per easyJet, ecc.). NON usare Google Flights come bookingUrl.
+   e) Imposta "verified": false su tutti i voli — gli orari precisi vanno sempre verificati dal viaggiatore direttamente sul sito della compagnia.
 2. STOPOVER PROATTIVI: Se un volo dura più di 8 ore o se c'è un cambio fuso orario importante, inserisci una notte di riposo nella città di scalo.
 3. COERENZA DATE E PERNOTTAMENTI: L'itinerario deve coprire esattamente dal ${inputs.startDate} al ${inputs.endDate}. Ogni giorno (tranne l'ultimo se si rientra in giornata) DEVE terminare con un'attività chiamata "Pernottamento: [Nome Hotel]" con il nome reale dell'hotel scelto. Il numero totale di notti deve corrispondere al periodo selezionato.
 4. ALLOGGI E TAPPE: Per OGNI tappa del viaggio (inclusi eventuali stopover), DEVI creare un oggetto nell'array "accommodations". L'hotel inserito in "accommodations" deve essere lo STESSO hotel indicato nelle attività di "Pernottamento" dell'itinerario per quella specifica tappa. DEVI fornire i dettagli completi (nome, tipo, stelle, rating, reviewSummary, estimatedPricePerNight, bookingUrl, address, amenities) per l'hotel scelto. Assicurati che il numero di notti ("nights") per ogni tappa sia corretto e che la somma totale delle notti coincida con la durata del viaggio.
+   IMPORTANTE: "estimatedPricePerNight" è il costo TOTALE per notte della camera per TUTTE le ${totalPeople} persone, NON per persona. Esempio: camera doppia €120/notte → estimatedPricePerNight: 120 (non 60 x 2).
 
 DETTAGLI VIAGGIO:
 - Partenza: ${inputs.departureCity}
 - Destinazione: ${inputs.destination}
 - Stopover richiesto: ${inputs.stopover || "Nessuno"}
 - Orario preferito: ${inputs.departureTimePreference || "Indifferente"}
-- Budget: €${inputs.budget} per ${totalPeople} persone
+- Mezzo di trasporto preferito: ${inputs.flightPreference || "Volo diretto"}
+- Budget TOTALE: €${inputs.budget} per ${totalPeople} persone (già moltiplicato per le persone)
 - Note: ${inputs.notes || "nessuna"}
+
+REGOLE PER IL MEZZO DI TRASPORTO:
+Il viaggiatore ha richiesto: "${inputs.flightPreference || 'Volo diretto'}"
+
+PRIMA DI TUTTO verifica se il mezzo scelto è compatibile con la tratta ${inputs.departureCity} → ${inputs.destination} nei giorni disponibili (${inputs.startDate} - ${inputs.endDate}):
+- AUTO PRIVATA: inadatta se la distanza supera ~1.500 km o se richiede attraversamento di oceani/mari non collegati da traghetto. Adatta per destinazioni europee raggiungibili in meno di 15 ore di guida.
+- TRENO: inadatto per destinazioni intercontinentali o isole non raggiungibili via ferrovia. Adatto per destinazioni europee con buoni collegamenti ferroviari.
+- VOLO DIRETTO: inadatto se non esiste un volo diretto sulla tratta. In tal caso proponi il minimo di scali.
+- VOLO ECONOMICO: sempre compatibile, ma segnala se i tempi di percorrenza con scali sono eccessivi.
+
+SE IL MEZZO SCELTO NON È COMPATIBILE:
+1. Segnalalo CHIARAMENTE nel campo "budgetWarning" con una spiegazione semplice (es. "Hai scelto l'auto privata ma Milano-Boa Vista richiede attraversamento oceanico — ho usato il volo come alternativa più adatta.")
+2. Scegli automaticamente il mezzo più appropriato per quella tratta e usa quello per pianificare il viaggio.
+
+SE IL MEZZO È COMPATIBILE, applica queste regole:
+${inputs.flightPreference === 'Auto privata' ? `
+- Il viaggio avviene in AUTO PRIVATA.
+- Per ogni tratto in auto stima: costo carburante (circa €0.08/km con consumo medio) + pedaggi autostrada reali.
+- Inserisci nell'array "flights" i segmenti stradali (airline: "Auto privata", route: "Città A → Città B", estimatedPrice: costo_totale_carburante_e_pedaggi, bookingUrl: link Google Maps del percorso).
+` : inputs.flightPreference === 'Treno' ? `
+- Il viaggio avviene in TRENO.
+- Cerca le tratte ferroviarie reali (Trenitalia, Italo, Renfe, SNCF, Eurostar, ecc.) e proponi il treno più adatto.
+- Per "bookingUrl" usa il sito ufficiale della compagnia ferroviaria.
+- In caso di attraversamento internazionale, considera Eurostar o treni notte.
+` : inputs.flightPreference === 'Volo economico' ? `
+- Priorità al COSTO più basso, anche con scali. Cerca le compagnie low-cost che operano la rotta.
+` : `
+- Priorità a VOLO DIRETTO senza scali. Se non esiste un diretto, spiega nel budgetWarning e proponi il meno scali possibile.
+`}
+- Una volta a destinazione, se servono trasporti locali (traghetti, bus, taxi, nave), includili nell'itinerario come attività con relativo costo.
 
 REGOLE DI FORMATO (CRITICHE PER EVITARE TRONCAMENTI):
 - Brevità ASSOLUTA: ogni stringa di testo MAX 5 parole. Niente frasi complete.
@@ -170,7 +204,7 @@ Struttura JSON richiesta (DEVI riempire TUTTI i campi con dati reali):
     {
       "segmentName": "Volo 1",
       "options": [
-        { "airline": "A", "route": "R", "estimatedPrice": 0, "date": "D", "departureTime": "00:00", "arrivalTime": "00:00", "duration": "1h", "bookingUrl": "U" }
+        { "airline": "A", "route": "R", "estimatedPrice": 0, "date": "D", "departureTime": "00:00", "arrivalTime": "00:00", "duration": "1h", "bookingUrl": "U", "verified": true }
       ]
     }
   ],
@@ -241,7 +275,7 @@ Restituisci SOLO il JSON aggiornato.
       model: "claude-sonnet-4-6",
       max_tokens: 16000,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }] as any,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 6 }] as any,
       messages: [
         {
           role: "user",

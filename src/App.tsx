@@ -705,17 +705,21 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
         });
       });
 
-      // Aggiungi i voli selezionati
-      Object.values(selectedFlights).forEach((flight: any, idx: number) => {
+      // Aggiungi i voli selezionati — una riga sola con il totale
+      const flightValues = Object.values(selectedFlights) as any[];
+      if (flightValues.length > 0) {
+        const totalFlightPrice = flightValues.reduce((s: number, f: any) => s + f.estimatedPrice, 0);
+        const routes = flightValues.map((f: any) => f.route).join(' → ');
+        const airlines = [...new Set(flightValues.map((f: any) => f.airline))].join(', ');
         rows.push({
-          'Data / Ora': `Volo Selezionato ${idx + 1}`,
-          'Luogo': '-',
-          'Attività': `${flight.airline} (${flight.route})`,
-          'Durata': flight.duration || '-',
-          'Costo Stimato': flight.estimatedPrice * numPeople,
-          'Note Costo': `€${flight.estimatedPrice} x ${numPeople} pers.`
+          'Data / Ora': 'Voli',
+          'Luogo': airlines,
+          'Attività': routes,
+          'Durata': '-',
+          'Costo Stimato': totalFlightPrice * numPeople,
+          'Note Costo': `€${totalFlightPrice} x ${numPeople} pers.`
         });
-      });
+      }
 
       // Aggiungi gli alloggi selezionati
       if (Object.keys(selectedAccommodations).length > 0) {
@@ -1165,9 +1169,9 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div>
               <h2 className="text-4xl mb-2 flex items-center gap-3">
-                <Plane className="w-7 h-7" /> Voli suggeriti
+                <Plane className="w-7 h-7" /> Mezzo di Trasporto
               </h2>
-              <p className="text-brand-ink/50 font-sans text-sm">Prezzi indicativi — verifica disponibilità sulle piattaforme di prenotazione</p>
+              <p className="text-brand-ink/50 font-sans text-sm">Prezzi indicativi — verifica disponibilità e orari sui siti ufficiali</p>
             </div>
             <a
               href={`https://www.google.com/flights?q=flights+from+${encodeURIComponent(inputs?.departureCity || '')}+to+${encodeURIComponent(inputs?.destination || plan.destinationOverview?.title || '')}+on+${inputs?.startDate || ''}+return+${inputs?.endDate || ''}`}
@@ -1204,7 +1208,21 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                             {flight.type}
                           </div>
                         )}
-                        
+
+                        {/* Badge verificato/indicativo */}
+                        <div className={cn(
+                          "absolute -top-3 right-6 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-sm flex items-center gap-1",
+                          flight.verified === false
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-green-100 text-green-700"
+                        )}>
+                          {flight.verified === false ? (
+                            <><AlertTriangle className="w-2.5 h-2.5" /> Indicativo — verifica</>
+                          ) : (
+                            <><CheckCircle2 className="w-2.5 h-2.5" /> Verificato</>
+                          )}
+                        </div>
+
                         {isSelected && (
                           <div className="absolute top-4 right-4 bg-brand-accent text-white p-1 rounded-full z-10">
                             <CheckCircle2 className="w-4 h-4" />
@@ -1232,6 +1250,17 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                         </div>
 
                         <div className="space-y-4 py-4 border-y border-brand-ink/5 mb-4">
+                          {/* Orari non disponibili — invito a verificare */}
+                          {(!flight.departureTime && !flight.arrivalTime) ? (
+                            <div className="flex items-center gap-3 bg-amber-50 rounded-2xl px-4 py-3">
+                              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-amber-800">Orari non disponibili in tempo reale</p>
+                                <p className="text-[11px] text-amber-700 mt-0.5">Verifica gli orari precisi e la disponibilità su Google Flights per le date del tuo viaggio.</p>
+                              </div>
+                            </div>
+                          ) : (
+                          <>
                           {/* Outbound */}
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -1281,6 +1310,8 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                               </div>
                             </div>
                           )}
+                          </>
+                          )}
                         </div>
 
                         {(flight.options || []).length > 0 && (
@@ -1303,9 +1334,9 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                             )}
                           >
                             {isSelected ? (
-                              <><CheckCircle2 className="w-4 h-4" /> Volo Selezionato</>
+                              <><CheckCircle2 className="w-4 h-4" /> Selezionato</>
                             ) : (
-                              'Seleziona questo volo'
+                              'Seleziona'
                             )}
                           </button>
                           <a 
@@ -1662,28 +1693,35 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                         })}
                       </React.Fragment>
                     ))}
-                    {Object.keys(selectedFlights).length > 0 && (
-                      <>
-                        <tr className="bg-brand-paper/20">
-                          <td colSpan={5} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
-                            Voli Selezionati
-                          </td>
-                        </tr>
-                        {Object.entries(selectedFlights).map(([idx, flight]: [string, any]) => (
-                          <tr key={`flight-${idx}`} className="border-b border-brand-ink/5 last:border-0 hover:bg-brand-paper/30 transition-colors">
-                            <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">{flight.date || '-'}</td>
-                            <td className="p-4 text-brand-ink/60 whitespace-nowrap">-</td>
-                            <td className="p-4 font-medium">
-                              {flight.airline} <span className="text-xs text-brand-ink/40 font-normal">({flight.route})</span>
-                            </td>
-                            <td className="p-4 text-brand-ink/60 whitespace-nowrap">{flight.duration || '-'}</td>
-                            <td className="p-4 text-right font-medium whitespace-nowrap">
-                              €{flight.estimatedPrice * (inputs.people.adults + inputs.people.children.length)} <span className="text-xs text-brand-ink/40 font-normal">(€{flight.estimatedPrice} x {inputs.people.adults + inputs.people.children.length} pers.)</span>
+                    {Object.keys(selectedFlights).length > 0 && (() => {
+                      const numPeople = inputs.people.adults + inputs.people.children.length;
+                      const flightEntries = Object.entries(selectedFlights) as [string, any][];
+                      const totalFlights = flightEntries.reduce((s, [, f]) => s + (f.estimatedPrice * numPeople), 0);
+                      const routes = flightEntries.map(([, f]) => f.route).join(' → ');
+                      const airlines = [...new Set(flightEntries.map(([, f]) => f.airline))].join(', ');
+                      return (
+                        <>
+                          <tr className="bg-brand-paper/20">
+                            <td colSpan={5} className="p-3 font-serif font-medium text-brand-accent border-y border-brand-ink/5">
+                              Trasporti Selezionati
                             </td>
                           </tr>
-                        ))}
-                      </>
-                    )}
+                          <tr className="border-b border-brand-ink/5 hover:bg-brand-paper/30 transition-colors">
+                            <td className="p-4 text-brand-ink/60 whitespace-nowrap font-mono text-xs">
+                              {flightEntries.map(([, f]) => f.date).filter(Boolean).join(' / ') || '-'}
+                            </td>
+                            <td className="p-4 text-brand-ink/60 whitespace-nowrap">{airlines}</td>
+                            <td className="p-4 font-medium">
+                              {routes} <span className="text-xs text-brand-ink/40 font-normal">({flightEntries.length} {flightEntries.length === 1 ? 'segmento' : 'segmenti'})</span>
+                            </td>
+                            <td className="p-4 text-brand-ink/60 whitespace-nowrap">-</td>
+                            <td className="p-4 text-right font-medium whitespace-nowrap">
+                              €{totalFlights} <span className="text-xs text-brand-ink/40 font-normal">(€{flightEntries.reduce((s, [, f]) => s + f.estimatedPrice, 0)} x {numPeople} pers.)</span>
+                            </td>
+                          </tr>
+                        </>
+                      );
+                    })()}
                     {Object.keys(selectedAccommodations).length > 0 && (
                       <>
                         <tr className="bg-brand-paper/20">
@@ -1702,7 +1740,7 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                               </td>
                               <td className="p-4 text-brand-ink/60 whitespace-nowrap">{nights} {nights === 1 ? 'notte' : 'notti'}</td>
                               <td className="p-4 text-right font-medium whitespace-nowrap">
-                                €{hotel.estimatedPricePerNight * nights} <span className="text-xs text-brand-ink/40 font-normal">(€{hotel.estimatedPricePerNight}/notte)</span>
+                                €{hotel.estimatedPricePerNight * nights} <span className="text-xs text-brand-ink/40 font-normal">(€{hotel.estimatedPricePerNight}/notte camera)</span>
                               </td>
                             </tr>
                           );
@@ -1807,7 +1845,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
     endDate: '',
     isPeriodFlexible: false,
     accommodationType: 'Hotel di charme',
-    flightPreference: 'Equilibrato',
+    flightPreference: 'Volo diretto',
     notes: '',
   });
 
@@ -1835,7 +1873,9 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
         return;
       }
     }
-    const finalInputs = { ...inputs, budget: parseInt(inputs.budgetInput) || 0 };
+    const perPerson = parseInt(inputs.budgetInput) || 0;
+    const totalPeople = inputs.people.adults + inputs.people.children.length;
+    const finalInputs = { ...inputs, budget: perPerson * totalPeople };
     onSubmit(finalInputs);
   };
 
@@ -1991,7 +2031,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
 
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                    <Euro className="w-3 h-3" /> Budget totale
+                    <Euro className="w-3 h-3" /> Budget per persona
                   </label>
                   <div className="relative">
                     <input
@@ -2004,7 +2044,18 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                     />
                     <span className="absolute right-0 bottom-3.5 text-xl text-brand-ink/30">€</span>
                   </div>
-                  <p className="text-[10px] text-brand-ink/30 italic">Include voli, alloggi, attività e pasti.</p>
+                  {(() => {
+                    const perPerson = parseInt(inputs.budgetInput) || 0;
+                    const totalPeople = inputs.people.adults + inputs.people.children.length;
+                    const total = perPerson * totalPeople;
+                    return perPerson > 0 && totalPeople > 0 ? (
+                      <p className="text-xs text-brand-accent font-bold">
+                        Totale: €{total.toLocaleString('it-IT')} per {totalPeople} {totalPeople === 1 ? 'persona' : 'persone'}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-brand-ink/30 italic">Include voli, alloggi, attività e pasti.</p>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -2071,17 +2122,17 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
 
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                    <Plane className="w-3 h-3" /> Preferenza Voli
+                    <Train className="w-3 h-3" /> Preferenza Trasporto
                   </label>
                   <select
                     className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors appearance-none cursor-pointer"
-                    value={inputs.flightPreference}
+                    value={inputs.flightPreference || 'Volo diretto'}
                     onChange={(e) => setInputs((p) => ({ ...p, flightPreference: e.target.value }))}
                   >
-                    <option>Equilibrato</option>
-                    <option>Costo più basso</option>
-                    <option>Durata minore (più veloci)</option>
-                    <option>Solo voli diretti</option>
+                    <option value="Volo diretto">✈️ Volo diretto</option>
+                    <option value="Volo economico">💸 Volo economico (anche con scali)</option>
+                    <option value="Treno">🚆 Treno</option>
+                    <option value="Auto privata">🚗 Auto privata</option>
                   </select>
                 </div>
               </div>
