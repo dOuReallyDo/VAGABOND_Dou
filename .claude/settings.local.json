@@ -10,7 +10,18 @@
       "Read(//opt/homebrew/opt/**)",
       "Bash(/opt/homebrew/opt/node.js/bin/npm install)",
       "Bash(PATH=\"/opt/homebrew/opt/node.js/bin:/opt/homebrew/bin:$PATH\" node --version)",
-      "Bash(PATH=\"/opt/homebrew/opt/node.js/bin:/opt/homebrew/bin:$PATH\" npm install)"
+      "Bash(PATH=\"/opt/homebrew/opt/node.js/bin:/opt/homebrew/bin:$PATH\" npm install)",
+      "Bash(PATH=\"/opt/homebrew/bin:$PATH\" npx tsc --noEmit)",
+      "Bash(/opt/homebrew/bin/node /opt/homebrew/bin/tsc --noEmit)",
+      "Bash(PATH=\"/opt/homebrew/bin:$PATH\" ./node_modules/.bin/tsc --noEmit)",
+      "Bash(PATH=\"/opt/homebrew/bin:$PATH\" /opt/homebrew/bin/npx --prefix \"/Users/roberta/Progetti Roberta/VAGABOND\" tsc --noEmit)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Bash(/opt/homebrew/bin/node /opt/homebrew/bin/../lib/node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(/opt/homebrew/bin/node /opt/homebrew/lib/node_modules/typescript/bin/tsc --noEmit)",
+      "Read(//opt/homebrew/lib/node_modules/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//opt/homebrew/**)",
+      "Bash(./node_modules/.bin/tsc --noEmit)"
     ]
   }
 }

@@ -9,6 +9,7 @@ export const TravelInputsSchema = z.object({
   }),
   budget: z.number().min(100),
   departureCity: z.string().min(2),
+  departureCountry: z.string().optional(),
   destination: z.string().min(2),
   country: z.string().optional(),
   startDate: z.string(),
@@ -186,6 +187,14 @@ export const TravelPlanSchema = z.object({
       description: z.string().optional(),
     })
   ).optional(),
+  travelHighlights: z.object({
+    whyChosen: z.string(),
+    mainStops: z.array(z.object({
+      name: z.string(),
+      reason: z.string(),
+    })),
+    whyUnforgettable: z.string(),
+  }).optional(),
 });
 
 export type TravelPlan = z.infer<typeof TravelPlanSchema>;

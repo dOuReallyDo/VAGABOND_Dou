@@ -114,14 +114,17 @@ REGOLE CRITICHE PER VOLI E LOGISTICA:
 2. STOPOVER PROATTIVI: Se un volo dura più di 8 ore o se c'è un cambio fuso orario importante, inserisci una notte di riposo nella città di scalo.
 3. COERENZA DATE E PERNOTTAMENTI: L'itinerario deve coprire esattamente dal ${inputs.startDate} al ${inputs.endDate}. Ogni giorno (tranne l'ultimo se si rientra in giornata) DEVE terminare con un'attività chiamata "Pernottamento: [Nome Hotel]" con il nome reale dell'hotel scelto. Il numero totale di notti deve corrispondere al periodo selezionato.
 4. ALLOGGI E TAPPE: Per OGNI tappa del viaggio (inclusi eventuali stopover), DEVI creare un oggetto nell'array "accommodations". L'hotel inserito in "accommodations" deve essere lo STESSO hotel indicato nelle attività di "Pernottamento" dell'itinerario per quella specifica tappa. DEVI fornire i dettagli completi (nome, tipo, stelle, rating, reviewSummary, estimatedPricePerNight, bookingUrl, address, amenities) per l'hotel scelto. Assicurati che il numero di notti ("nights") per ogni tappa sia corretto e che la somma totale delle notti coincida con la durata del viaggio.
+   TIPOLOGIE ALLOGGIO: Il viaggiatore ha scelto: "${inputs.accommodationType}". Proponi strutture che rientrano ESCLUSIVAMENTE nelle tipologie indicate. Se sono selezionate più tipologie, distribuisci le opzioni tra le categorie scelte.
+   QUALITÀ: Proponi SOLO strutture con ottime recensioni (rating minimo 8.0/10 su Booking o 4.2/5 su TripAdvisor). Nel campo "reviewSummary" riporta un estratto reale o rappresentativo delle recensioni dei clienti, evidenziando i punti di forza.
    IMPORTANTE: "estimatedPricePerNight" è il costo TOTALE per notte della camera per TUTTE le ${totalPeople} persone, NON per persona. Esempio: camera doppia €120/notte → estimatedPricePerNight: 120 (non 60 x 2).
 
 DETTAGLI VIAGGIO:
-- Partenza: ${inputs.departureCity}
-- Destinazione: ${inputs.destination}
+- Partenza: ${inputs.departureCity}${inputs.departureCountry ? ` (${inputs.departureCountry})` : ''}
+- Destinazione: ${inputs.destination}${inputs.country ? ` (${inputs.country})` : ''}
 - Stopover richiesto: ${inputs.stopover || "Nessuno"}
 - Orario preferito: ${inputs.departureTimePreference || "Indifferente"}
 - Mezzo di trasporto preferito: ${inputs.flightPreference || "Volo diretto"}
+- Tipologie alloggio richieste: ${inputs.accommodationType}
 - Budget TOTALE: €${inputs.budget} per ${totalPeople} persone (già moltiplicato per le persone)
 - Note: ${inputs.notes || "nessuna"}
 
@@ -246,7 +249,14 @@ Struttura JSON richiesta (DEVI riempire TUTTI i campi con dati reali):
   },
   "travelBlogs": [
     { "title": "T", "url": "U", "description": "D" }
-  ]
+  ],
+  "travelHighlights": {
+    "whyChosen": "Breve testo entusiastico (2-3 frasi) su perché hai scelto questo itinerario specifico per il viaggiatore, legato al budget, al periodo e alle sue preferenze.",
+    "mainStops": [
+      { "name": "Nome tappa o città", "reason": "Perché questa tappa è speciale e cosa la rende unica in questo viaggio" }
+    ],
+    "whyUnforgettable": "2-3 frasi evocative e coinvolgenti su cosa renderà questo viaggio memorabile e irripetibile — emozioni, esperienze, momenti che porterà con sé."
+  }
 }
 `;
 
@@ -365,14 +375,17 @@ export const getDestinationCountries = async (destination: string): Promise<stri
   const apiKey = await getApiKey();
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
-  const prompt = `
-In quale nazione si trova la destinazione "${destination}"?
-Se il nome corrisponde a più luoghi in nazioni diverse (es. "Boa Vista" può essere a Capo Verde o in Brasile), elenca TUTTE le nazioni possibili.
-Se corrisponde a una sola nazione, elenca solo quella.
-Se la destinazione è già una nazione (es. "Islanda"), restituisci il nome della nazione in italiano.
+  const prompt = `Analizza il nome "${destination}" e cerca TUTTI i possibili luoghi nel mondo con quel nome (città, regioni, isole, nazioni).
+Considera anche varianti ortografiche e nomi simili (es. "Valenza" include sia Valenza Po in Italia che Valencia in Spagna; "Valencia" include Spagna e Venezuela).
+Includi anche luoghi meno noti se esistono.
 
-Restituisci SOLO un array JSON di stringhe con i nomi delle nazioni in italiano. Esempio: ["Capo Verde", "Brasile"] oppure ["Francia"].
-`;
+Regole:
+- Elenca TUTTE le nazioni in cui esiste un luogo con quel nome o un nome molto simile
+- Se è già un nome di nazione, includi quella nazione
+- Non escludere nessuna opzione plausibile, meglio avere qualche opzione in più che mancarne una
+- Nomi in italiano
+
+Restituisci SOLO un array JSON di stringhe. Esempio: ["Italia", "Spagna"] oppure ["Francia"].`;
 
   try {
     const response = await client.messages.create({

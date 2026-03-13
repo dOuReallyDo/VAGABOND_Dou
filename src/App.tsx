@@ -499,7 +499,12 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
   const [accommodationNights, setAccommodationNights] = useState<Record<number, number>>({});
   const [selectedFlights, setSelectedFlights] = useState<Record<number, any>>({});
   const [expandedDays, setExpandedDays] = useState<Record<number, boolean>>({ 0: true });
-  const heroUrl = getImageUrl(plan.destinationOverview, plan.destinationOverview?.title + ' landscape');
+  const [hotelsExpanded, setHotelsExpanded] = useState(false);
+  const [restaurantsExpanded, setRestaurantsExpanded] = useState(false);
+
+  // Hero: usa destination + country come keyword per immagini più coerenti
+  const heroKeyword = [inputs?.destination, inputs?.country].filter(Boolean).join(',') || plan.destinationOverview?.title || 'travel';
+  const heroUrl = getImageUrl(plan.destinationOverview, heroKeyword + ',landscape,city');
 
   // Inizializza le notti e le selezioni con i valori suggeriti dal piano
   useEffect(() => {
@@ -814,17 +819,70 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                 {plan.destinationOverview.tagline}
               </p>
             )}
-            <h1 className="text-7xl md:text-[7rem] text-white print:text-brand-ink leading-none mb-6 drop-shadow-lg print:drop-shadow-none">
+            <h1 className="text-7xl md:text-[7rem] text-white print:text-brand-ink leading-none drop-shadow-lg print:drop-shadow-none">
               {plan.destinationOverview?.title}
             </h1>
-            <p className="text-xl text-white/85 print:text-brand-ink/85 font-serif italic max-w-2xl leading-relaxed">
-              {plan.destinationOverview?.description}
-            </p>
           </motion.div>
         </div>
       </section>
 
-      <div className="max-w-7xl mx-auto px-6 pt-4">
+      <div className="max-w-7xl mx-auto px-6 pt-0">
+
+        {/* INTRO — descrizione viaggio */}
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-10 -mt-10 relative z-10 bg-white rounded-[2rem] shadow-lg p-8 md:p-12"
+        >
+          <p className="text-xs uppercase tracking-widest text-brand-accent font-bold mb-4">Il tuo viaggio</p>
+
+          {/* Descrizione principale */}
+          <p className="text-2xl md:text-3xl font-serif leading-snug text-brand-ink mb-8">
+            {plan.destinationOverview?.description}
+          </p>
+
+          {plan.travelHighlights && (
+            <>
+              {/* Perché questo itinerario */}
+              {plan.travelHighlights.whyChosen && (
+                <p className="text-brand-ink/70 leading-relaxed mb-8 text-base md:text-lg">
+                  {plan.travelHighlights.whyChosen}
+                </p>
+              )}
+
+              {/* Tappe principali */}
+              {plan.travelHighlights.mainStops?.length > 0 && (
+                <div className="mb-8">
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-brand-ink/40 mb-4">Le tappe del viaggio</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {plan.travelHighlights.mainStops.map((stop: any, i: number) => (
+                      <div key={i} className="flex gap-3 bg-brand-ink/3 rounded-2xl p-4">
+                        <div className="w-7 h-7 rounded-full bg-brand-accent/10 text-brand-accent text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          {i + 1}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-brand-ink text-sm mb-0.5">{stop.name}</p>
+                          <p className="text-brand-ink/60 text-sm leading-relaxed">{stop.reason}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Perché indimenticabile */}
+              {plan.travelHighlights.whyUnforgettable && (
+                <div className="border-l-4 border-brand-accent pl-5">
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-brand-accent mb-2">Perché sarà indimenticabile</p>
+                  <p className="font-serif italic text-lg text-brand-ink/80 leading-relaxed">
+                    {plan.travelHighlights.whyUnforgettable}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </motion.section>
 
         {/* BUDGET WARNING */}
         {plan.budgetWarning && (
@@ -1359,11 +1417,23 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
         </section>
 
         {/* ALLOGGI */}
-        <section className="mb-20">
-          <h2 className="text-4xl mb-2 flex items-center gap-3">
-            <Hotel className="w-7 h-7" /> Alloggi scelti
-          </h2>
-          <p className="text-brand-ink/50 mb-10 font-sans text-sm">Le strutture selezionate per il tuo pernottamento</p>
+        <section className="mb-10">
+          <button
+            type="button"
+            onClick={() => setHotelsExpanded((v) => !v)}
+            className="w-full flex items-center justify-between gap-3 text-left group mb-2"
+          >
+            <div className="flex items-center gap-3">
+              <Hotel className="w-7 h-7" />
+              <h2 className="text-4xl">Alloggi scelti</h2>
+            </div>
+            <span className={cn('text-brand-ink/30 group-hover:text-brand-accent transition-all duration-300 text-sm font-medium flex items-center gap-1', hotelsExpanded && 'rotate-180')}>
+              <ChevronRight className={cn('w-5 h-5 transition-transform duration-300', hotelsExpanded ? 'rotate-90' : '-rotate-90')} />
+              {hotelsExpanded ? 'Chiudi' : 'Espandi'}
+            </span>
+          </button>
+          <p className="text-brand-ink/50 mb-6 font-sans text-sm">Le strutture selezionate per il tuo pernottamento</p>
+          {hotelsExpanded && <div className="space-y-14 mt-6">
           <div className="space-y-14">
             {(plan.accommodations || []).map((stop: any, i: number) => (
               <div key={i}>
@@ -1500,18 +1570,30 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
               } else {
                 alert("Errore nell'aggiunta dell'alloggio: tappa non valida.");
               }
-            }} 
+            }}
           />
+          </div>}
         </section>
 
         {/* RISTORANTI */}
         {plan.bestRestaurants?.length > 0 && (
-          <section className="mb-20">
-            <h2 className="text-4xl mb-2 flex items-center gap-3">
-              <Utensils className="w-7 h-7" /> Dove mangiare
-            </h2>
-            <p className="text-brand-ink/50 mb-10 font-sans text-sm">Ristoranti locali autentici, selezionati per qualità e genuinità</p>
-            <div className="space-y-14">
+          <section className="mb-10">
+            <button
+              type="button"
+              onClick={() => setRestaurantsExpanded((v) => !v)}
+              className="w-full flex items-center justify-between gap-3 text-left group mb-2"
+            >
+              <div className="flex items-center gap-3">
+                <Utensils className="w-7 h-7" />
+                <h2 className="text-4xl">Dove mangiare</h2>
+              </div>
+              <span className="text-brand-ink/30 group-hover:text-brand-accent transition-all duration-300 text-sm font-medium flex items-center gap-1">
+                <ChevronRight className={cn('w-5 h-5 transition-transform duration-300', restaurantsExpanded ? 'rotate-90' : '-rotate-90')} />
+                {restaurantsExpanded ? 'Chiudi' : 'Espandi'}
+              </span>
+            </button>
+            <p className="text-brand-ink/50 mb-6 font-sans text-sm">Ristoranti locali autentici, selezionati per qualità e genuinità</p>
+            {restaurantsExpanded && <div className="space-y-14 mt-6">
               {plan.bestRestaurants.map((stop: any, i: number) => (
                 <div key={i}>
                   <h3 className="text-2xl mb-6 text-brand-accent italic flex items-center gap-2">
@@ -1554,7 +1636,7 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
           </section>
         )}
 
@@ -1840,7 +1922,9 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
     budget: 2000,
     budgetInput: '2000',
     departureCity: '',
+    departureCountry: '',
     destination: '',
+    country: '',
     startDate: '',
     endDate: '',
     isPeriodFlexible: false,
@@ -1848,6 +1932,60 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
     flightPreference: 'Volo diretto',
     notes: '',
   });
+
+  const [selectedAccommodations, setSelectedAccommodations] = useState<string[]>(['Hotel di charme']);
+
+  const ACCOMMODATION_OPTIONS = [
+    'Hotel di charme',
+    'Hotel economici',
+    'Resort',
+    'Hotel di lusso',
+    'B&B',
+    'Esperienze uniche (Ryokan, Glamping, Case sull\'albero…)',
+    'Appartamenti',
+  ];
+
+  const toggleAccommodation = (option: string) => {
+    setSelectedAccommodations((prev) => {
+      const next = prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option];
+      return next.length === 0 ? prev : next; // almeno uno selezionato
+    });
+  };
+
+  const [departureCityOptions, setDepartureCityOptions] = useState<string[]>([]);
+  const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
+  const [loadingDepartureCountry, setLoadingDepartureCountry] = useState(false);
+  const [loadingDestinationCountry, setLoadingDestinationCountry] = useState(false);
+
+  useEffect(() => {
+    if (!inputs.departureCity || inputs.departureCity.length < 3) return;
+    const timer = setTimeout(async () => {
+      setLoadingDepartureCountry(true);
+      try {
+        const options = await getDestinationCountries(inputs.departureCity);
+        setDepartureCityOptions(options);
+        if (options.length === 1) setInputs((p) => ({ ...p, departureCountry: options[0] }));
+      } catch { /* ignore */ } finally {
+        setLoadingDepartureCountry(false);
+      }
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [inputs.departureCity]);
+
+  useEffect(() => {
+    if (!inputs.destination || inputs.destination.length < 3) return;
+    const timer = setTimeout(async () => {
+      setLoadingDestinationCountry(true);
+      try {
+        const options = await getDestinationCountries(inputs.destination);
+        setDestinationOptions(options);
+        if (options.length === 1) setInputs((p) => ({ ...p, country: options[0] }));
+      } catch { /* ignore */ } finally {
+        setLoadingDestinationCountry(false);
+      }
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [inputs.destination]);
 
   const handleAddChild = () =>
     setInputs((p) => ({ ...p, people: { ...p.people, children: [...p.people.children, { age: 8 }] } }));
@@ -1875,7 +2013,11 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
     }
     const perPerson = parseInt(inputs.budgetInput) || 0;
     const totalPeople = inputs.people.adults + inputs.people.children.length;
-    const finalInputs = { ...inputs, budget: perPerson * totalPeople };
+    const finalInputs = {
+      ...inputs,
+      budget: perPerson * totalPeople,
+      accommodationType: selectedAccommodations.join(', '),
+    };
     onSubmit(finalInputs);
   };
 
@@ -1893,7 +2035,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
         
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10">
           <h1 className="text-5xl md:text-7xl xl:text-8xl mb-4 text-white leading-none drop-shadow-lg font-bold tracking-tight">
-            Vagabond
+            Leo AI
           </h1>
           <p className="text-lg md:text-xl font-serif italic text-white/90 max-w-md drop-shadow-md">
             Il tuo concierge digitale per viaggi autentici e indimenticabili.
@@ -1921,8 +2063,30 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                     placeholder="Milano, Roma…"
                     className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-xl focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
                     value={inputs.departureCity}
-                    onChange={(e) => setInputs((p) => ({ ...p, departureCity: e.target.value }))}
+                    onChange={(e) => setInputs((p) => ({ ...p, departureCity: e.target.value, departureCountry: '' }))}
                   />
+                  {/* Country auto-field */}
+                  <div className="flex items-center gap-2 mt-1">
+                    {loadingDepartureCountry && <Loader2 className="w-3 h-3 animate-spin text-brand-ink/30" />}
+                    {!loadingDepartureCountry && departureCityOptions.length > 1 ? (
+                      <select
+                        className="text-xs text-brand-ink/60 bg-transparent border-b border-brand-ink/10 outline-none py-1 pr-2 cursor-pointer"
+                        value={inputs.departureCountry || ''}
+                        onChange={(e) => setInputs((p) => ({ ...p, departureCountry: e.target.value }))}
+                      >
+                        <option value="">— Seleziona nazione —</option>
+                        {departureCityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Nazione"
+                        className="text-xs text-brand-ink/50 bg-transparent border-b border-brand-ink/10 py-1 outline-none focus:border-brand-accent transition-colors placeholder:text-brand-ink/20 w-40"
+                        value={inputs.departureCountry || ''}
+                        onChange={(e) => setInputs((p) => ({ ...p, departureCountry: e.target.value }))}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
@@ -1934,8 +2098,30 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                     placeholder="Islanda, Giappone, Bali…"
                     className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-xl focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
                     value={inputs.destination}
-                    onChange={(e) => setInputs((p) => ({ ...p, destination: e.target.value }))}
+                    onChange={(e) => setInputs((p) => ({ ...p, destination: e.target.value, country: '' }))}
                   />
+                  {/* Country auto-field */}
+                  <div className="flex items-center gap-2 mt-1">
+                    {loadingDestinationCountry && <Loader2 className="w-3 h-3 animate-spin text-brand-ink/30" />}
+                    {!loadingDestinationCountry && destinationOptions.length > 1 ? (
+                      <select
+                        className="text-xs text-brand-ink/60 bg-transparent border-b border-brand-ink/10 outline-none py-1 pr-2 cursor-pointer"
+                        value={inputs.country || ''}
+                        onChange={(e) => setInputs((p) => ({ ...p, country: e.target.value }))}
+                      >
+                        <option value="">— Seleziona nazione —</option>
+                        {destinationOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Nazione"
+                        className="text-xs text-brand-ink/50 bg-transparent border-b border-brand-ink/10 py-1 outline-none focus:border-brand-accent transition-colors placeholder:text-brand-ink/20 w-40"
+                        value={inputs.country || ''}
+                        onChange={(e) => setInputs((p) => ({ ...p, country: e.target.value }))}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2103,21 +2289,30 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                   </label>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3 md:col-span-2">
                   <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
-                    <Home className="w-3 h-3" /> Tipologia alloggio
+                    <Home className="w-3 h-3" /> Tipologia alloggio <span className="text-brand-ink/30 normal-case tracking-normal font-normal">(puoi scegliere più opzioni)</span>
                   </label>
-                  <select
-                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors appearance-none cursor-pointer"
-                    value={inputs.accommodationType}
-                    onChange={(e) => setInputs((p) => ({ ...p, accommodationType: e.target.value }))}
-                  >
-                    <option>Hotel di charme</option>
-                    <option>No Resort — Boutique Hotel</option>
-                    <option>B&B locali</option>
-                    <option>Appartamenti o ville</option>
-                    <option>Esperienze uniche (glamping, ryokan…)</option>
-                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    {ACCOMMODATION_OPTIONS.map((option) => {
+                      const active = selectedAccommodations.includes(option);
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => toggleAccommodation(option)}
+                          className={cn(
+                            'px-3 py-1.5 rounded-full text-sm border transition-all duration-200 cursor-pointer',
+                            active
+                              ? 'bg-brand-accent text-white border-brand-accent'
+                              : 'bg-transparent text-brand-ink/50 border-brand-ink/20 hover:border-brand-accent hover:text-brand-accent'
+                          )}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
