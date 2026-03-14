@@ -2034,9 +2034,13 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
         <div className="absolute inset-0 bg-brand-ink/10" />
         
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10">
-          <h1 className="text-5xl md:text-7xl xl:text-8xl mb-4 text-white leading-none drop-shadow-lg font-bold tracking-tight">
-            Leo AI
-          </h1>
+          <div className="mb-6 inline-block bg-white rounded-2xl px-6 py-4 shadow-lg">
+            <img
+              src="/leowanderlogo.png"
+              alt="Leo Wander"
+              className="h-14 md:h-20 w-auto"
+            />
+          </div>
           <p className="text-lg md:text-xl font-serif italic text-white/90 max-w-md drop-shadow-md">
             Il tuo concierge digitale per viaggi autentici e indimenticabili.
           </p>
