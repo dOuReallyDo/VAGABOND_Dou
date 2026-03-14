@@ -2038,7 +2038,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
             <img
               src="/leowanderlogo.png"
               alt="Leo Wander"
-              className="h-14 md:h-20 w-auto"
+              className="w-48 md:w-64 h-auto"
             />
           </div>
           <p className="text-lg md:text-xl font-serif italic text-white/90 max-w-md drop-shadow-md">
