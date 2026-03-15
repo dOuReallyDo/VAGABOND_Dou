@@ -2033,7 +2033,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         <div className="absolute inset-0 bg-brand-ink/10" />
         
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10 flex flex-col items-center text-center">
           <div className="mb-6 inline-block bg-white rounded-2xl px-6 py-4 shadow-lg">
             <img
               src="/leowanderlogo.png"
