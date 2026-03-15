@@ -459,7 +459,7 @@ function AccommodationReviewer({ stops, inputs, onAdd }: { stops: any[]; inputs:
               <h4 className="text-xs font-bold uppercase tracking-widest text-brand-ink/40 mb-3">Cerca su</h4>
               <div className="flex flex-wrap gap-3">
                 <a
-                  href={`https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(stops[stopIndex].stopName)}`}
+                  href={inputs ? getBookingUrl(name, stops[stopIndex].stopName, inputs.startDate, inputs.endDate, inputs.people) : `https://www.google.com/search?q=booking+${encodeURIComponent(name)}+${encodeURIComponent(stops[stopIndex].stopName)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs bg-brand-ink/5 hover:bg-brand-ink/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
@@ -1127,16 +1127,43 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {(day.activities || []).map((act: any, j: number) => {
                               const searchDestination = act.location || plan.destinationOverview?.title || inputs?.destination;
+                              const actText = ((act.name || '') + ' ' + (act.description || '')).toLowerCase();
+                              const isPernottamento = actText.includes('pernottamento');
+                              const GENERIC_KEYWORDS = ['check out', 'checkout', 'check-in', 'check in', 'checkin', 'colazione', 'partenza', 'riposo', 'tempo libero', 'notte in'];
+                              const isGeneric = !isPernottamento && GENERIC_KEYWORDS.some(kw => actText.includes(kw));
+                              const ROUTE_KEYWORDS = ['tragitto', 'trasferimento', 'transfer in auto', 'transfer in treno', 'in treno da', 'in auto da', 'viaggio in treno', 'viaggio in auto'];
+                              const isRoute = !isGeneric && !isPernottamento && ROUTE_KEYWORDS.some(kw => actText.includes(kw));
+                              const hotelName = isPernottamento
+                                ? (act.name || '').replace(/^pernottamento:\s*/i, '').trim()
+                                : '';
+                              const bookingLink = (() => {
+                                if (!isPernottamento || !inputs) return null;
+                                const dayOffset = (day.day || 1) - 1;
+                                const checkin = new Date(inputs.startDate);
+                                checkin.setDate(checkin.getDate() + dayOffset);
+                                const checkout = new Date(checkin);
+                                checkout.setDate(checkout.getDate() + 1);
+                                const fmt = (d: Date) => d.toISOString().split('T')[0];
+                                return getBookingUrl(hotelName || searchDestination || '', act.location || searchDestination || '', fmt(checkin), fmt(checkout), inputs.people);
+                              })();
+                              const mapsLink = isRoute
+                                ? `https://www.google.com/maps/dir/${encodeURIComponent(act.location || searchDestination || '')}`
+                                : null;
+                              const webSearchLink = !isGeneric && !isRoute && !isPernottamento
+                                ? `https://www.google.com/search?q=${encodeURIComponent((act.name || act.description || '') + (act.location ? ' ' + act.location : ' ' + (plan.destinationOverview?.title || inputs?.destination || '')))}`
+                                : null;
+                              const cardLink = isGeneric ? undefined : (bookingLink || mapsLink || webSearchLink || undefined);
+                              const CardTag = cardLink ? 'a' : 'div';
+                              const cardProps = cardLink ? { href: cardLink, target: '_blank', rel: 'noopener noreferrer' } : {};
                               return (
-                              <a
+                              <CardTag
                                 key={j}
-                                href={getSafeLink(act.sourceUrl, act.name || act.description, searchDestination)}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                {...cardProps}
                                 className={cn(
-                                  "group bg-brand-paper/30 rounded-3xl border p-6 hover:shadow-md transition-all block",
-                                  act.name?.toLowerCase().includes('pernottamento') 
-                                    ? "border-brand-accent/20 bg-brand-accent/5" 
+                                  "group bg-brand-paper/30 rounded-3xl border p-6 transition-all block",
+                                  cardLink ? "hover:shadow-md" : "",
+                                  act.name?.toLowerCase().includes('pernottamento')
+                                    ? "border-brand-accent/20 bg-brand-accent/5"
                                     : "border-brand-ink/5"
                                 )}
                               >
@@ -1154,16 +1181,17 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                                   )}
                                   {act.costEstimate !== undefined && !act.name?.toLowerCase().includes('pernottamento') && (
                                     <span className="text-sm font-bold text-brand-accent">
-                                      {act.costEstimate === 0 
+                                      {act.costEstimate === 0
                                         ? (act.description?.toLowerCase().includes('vedi costo nella sezione voli') || act.tips?.toLowerCase().includes('vedi costo nella sezione voli')
-                                          ? 'Vedi sezione voli' 
-                                          : 'Gratis')
+                                          ? 'Vedi sezione voli'
+                                          : null)
                                         : `€${act.costEstimate}`}
                                     </span>
                                   )}
                                 </div>
                                 {act.name && <h4 className={cn(
-                                  "text-lg font-serif mb-2 leading-tight group-hover:text-brand-accent transition-colors",
+                                  "text-lg font-serif mb-2 leading-tight",
+                                  cardLink ? "group-hover:text-brand-accent transition-colors" : "",
                                   act.name?.toLowerCase().includes('pernottamento') && "text-brand-accent"
                                 )}>{act.name}</h4>}
                                 {act.location && (
@@ -1172,7 +1200,7 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                                   </p>
                                 )}
                                 <p className="text-brand-ink/70 text-sm leading-relaxed">{act.description}</p>
-                                
+
                                 {(act.transport || act.travelTime) && (
                                   <div className="mt-4 pt-4 border-t border-brand-ink/5 flex flex-wrap gap-3">
                                     {act.transport && (
@@ -1194,10 +1222,12 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                                     <p className="text-xs text-amber-800 leading-relaxed">{act.tips}</p>
                                   </div>
                                 )}
-                                <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <ExternalLink className="w-3 h-3" /> Verifica sul web
-                                </div>
-                              </a>
+                                {cardLink && (
+                                  <div className="mt-4 flex items-center gap-1.5 text-[10px] text-brand-accent font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ExternalLink className="w-3 h-3" /> {isRoute ? 'Apri su Google Maps' : 'Verifica sul web'}
+                                  </div>
+                                )}
+                              </CardTag>
                               );
                             })}
                           </div>
