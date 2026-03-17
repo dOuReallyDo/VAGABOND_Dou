@@ -1959,7 +1959,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
     endDate: '',
     isPeriodFlexible: false,
     accommodationType: 'Hotel di charme',
-    flightPreference: 'Volo diretto',
+    flightPreference: '',
     notes: '',
   });
 
@@ -2355,9 +2355,11 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                   </label>
                   <select
                     className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-lg focus:border-brand-accent outline-none transition-colors appearance-none cursor-pointer"
-                    value={inputs.flightPreference || 'Volo diretto'}
+                    value={inputs.flightPreference}
                     onChange={(e) => setInputs((p) => ({ ...p, flightPreference: e.target.value }))}
+                    required
                   >
+                    <option value="" disabled>Seleziona un'opzione</option>
                     <option value="Volo diretto">✈️ Volo diretto</option>
                     <option value="Volo economico">💸 Volo economico (anche con scali)</option>
                     <option value="Treno">🚆 Treno</option>
