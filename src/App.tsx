@@ -9,7 +9,7 @@ import {
   Users, Euro, MapPin, Calendar, Home, MessageSquare, Plane, Hotel,
   Sun, ShieldCheck, ArrowRight, Plus, Minus, Loader2, Star,
   CheckCircle2, AlertTriangle, ChevronRight, ExternalLink, Utensils,
-  Clock, Lightbulb, Smartphone, Train, Download, Search
+  Clock, Lightbulb, Smartphone, Train, Download, Search, Car
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1317,10 +1317,18 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {(segment.options || []).map((flight: any, i: number) => {
                     const isSelected = selectedFlights[segmentIdx]?.airline === flight.airline && selectedFlights[segmentIdx]?.route === flight.route;
+                    const isCarRoute = flight.airline?.toLowerCase() === 'auto privata';
+                    const routeParts = flight.route?.split(/\s*(?:->|→)\s*/) || [];
+                    const carOrigin = routeParts[0]?.trim() || '';
+                    const carDest = routeParts[1]?.trim() || '';
+                    const mapsEmbedUrl = isCarRoute && carOrigin && carDest
+                      ? `https://maps.google.com/maps?f=d&source=s_d&saddr=${encodeURIComponent(carOrigin)}&daddr=${encodeURIComponent(carDest)}&hl=it&output=embed`
+                      : null;
                     return (
                       <div
                         key={i}
                         className={cn("glass p-7 rounded-3xl hover:shadow-md transition-all group block relative border-2",
+                          isCarRoute ? "col-span-full" : "",
                           isSelected ? "border-brand-accent ring-4 ring-brand-accent/10" : "border-transparent"
                         )}
                       >
@@ -1350,6 +1358,8 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                           </div>
                         )}
 
+                        <div className={cn(isCarRoute ? "flex gap-6 items-start" : "")}>
+                        <div className={cn(isCarRoute ? "flex-1 min-w-0" : "")}>
                         <div className="flex justify-between items-start mb-6">
                           <div>
                             <p className="font-bold text-xl text-brand-ink">{flight.airline}</p>
@@ -1445,30 +1455,55 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                           </ul>
                         )}
 
-                        <div className="flex items-center gap-3">
-                          <button 
-                            onClick={() => setSelectedFlights(prev => ({ ...prev, [segmentIdx]: flight }))}
-                            className={cn("flex-1 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2",
-                              isSelected 
-                                ? "bg-brand-accent text-white shadow-lg shadow-brand-accent/20" 
-                                : "bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5"
-                            )}
+                        {!isCarRoute ? (
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => setSelectedFlights(prev => ({ ...prev, [segmentIdx]: flight }))}
+                              className={cn("flex-1 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2",
+                                isSelected
+                                  ? "bg-brand-accent text-white shadow-lg shadow-brand-accent/20"
+                                  : "bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5"
+                              )}
+                            >
+                              {isSelected ? (
+                                <><CheckCircle2 className="w-4 h-4" /> Selezionato</>
+                              ) : (
+                                'Seleziona'
+                              )}
+                            </button>
+                            <a
+                              href={getSafeLink(flight.bookingUrl, flight.airline + ' ' + flight.route)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-3 rounded-2xl bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5 transition-colors"
+                              title="Vedi su Google Flights"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          </div>
+                        ) : (
+                          <a
+                            href={`https://www.google.com/maps/dir/${encodeURIComponent(carOrigin)}/${encodeURIComponent(carDest)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm font-bold text-brand-accent hover:underline mt-4"
                           >
-                            {isSelected ? (
-                              <><CheckCircle2 className="w-4 h-4" /> Selezionato</>
-                            ) : (
-                              'Seleziona'
-                            )}
-                          </button>
-                          <a 
-                            href={getSafeLink(flight.bookingUrl, flight.airline + ' ' + flight.route)} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="p-3 rounded-2xl bg-brand-paper border border-brand-ink/10 text-brand-ink hover:bg-brand-ink/5 transition-colors"
-                            title="Vedi su Google Flights"
-                          >
-                            <ExternalLink className="w-4 h-4" />
+                            <Car className="w-4 h-4" /> Apri in Google Maps
                           </a>
+                        )}
+                        </div>
+                        {isCarRoute && mapsEmbedUrl && (
+                          <div className="flex-1 rounded-2xl overflow-hidden" style={{ minHeight: '320px' }}>
+                            <iframe
+                              src={mapsEmbedUrl}
+                              width="100%"
+                              height="100%"
+                              style={{ border: 0, minHeight: '320px' }}
+                              loading="lazy"
+                              title="Percorso Google Maps"
+                            />
+                          </div>
+                        )}
                         </div>
                       </div>
                     );
