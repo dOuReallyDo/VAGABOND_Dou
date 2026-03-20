@@ -22,6 +22,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+
 // Immagine da screenshot (thum.io) o fallback dinamico (loremflickr)
 const getImageUrl = (item: any, keyword: string) => {
   // Se l'IA ha fornito un URL immagine che sembra valido, proviamo a usarlo
