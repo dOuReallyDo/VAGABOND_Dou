@@ -63,6 +63,18 @@ const getBookingUrl = (hotelName: string, city: string, startDate: string, endDa
   return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(hotelName + ' ' + city)}&checkin=${checkin}&checkout=${checkout}&group_adults=${adults}&group_children=${children}${ages}&selected_currency=EUR`;
 };
 
+const getBookingPlatformUrls = (hotelName: string, city: string, checkin: string, checkout: string, people: { adults: number, children: { age: number }[] }) => {
+  const adults = people.adults;
+  const children = people.children.length;
+  const ages = people.children.map(c => `&age=${c.age}`).join('');
+  const q = encodeURIComponent(hotelName + ' ' + city);
+  return {
+    booking: `https://www.booking.com/searchresults.html?ss=${q}&checkin=${checkin}&checkout=${checkout}&group_adults=${adults}&group_children=${children}${ages}&selected_currency=EUR`,
+    expedia: `https://www.expedia.it/Hotel-Search?destination=${q}&startDate=${checkin}&endDate=${checkout}&adults=${adults}&children=${children}`,
+    airbnb: `https://www.airbnb.it/s/${encodeURIComponent(city)}/homes?checkin=${checkin}&checkout=${checkout}&adults=${adults}&children=${children}`,
+  };
+};
+
 const getSafeLink = (url: string | undefined, name: string, destination?: string): string => {
   // Se è un pernottamento, forziamo la ricerca per trovare l'hotel specifico
   if (name.toLowerCase().includes('pernottamento')) {
@@ -101,6 +113,16 @@ function LoadingScreen({ step, progress }: { step: string; progress: number }) {
   const [elapsed, setElapsed] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(progress);
   const [tipIndex, setTipIndex] = useState(0);
+  const [globeIndex, setGlobeIndex] = useState(0);
+  const GLOBES = ['🌍', '🌎', '🌏'];
+
+  // Rotazione globo ogni 300ms
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setGlobeIndex(i => (i + 1) % 3);
+    }, 300);
+    return () => clearInterval(interval);
+  }, []);
 
   // Contatore secondi trascorsi
   useEffect(() => {
@@ -154,7 +176,7 @@ function LoadingScreen({ step, progress }: { step: string; progress: number }) {
           <div className="absolute inset-0 rounded-full border-4 border-brand-accent/20 animate-pulse" />
           <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-accent animate-spin" />
           <div className="absolute inset-0 flex items-center justify-center text-5xl">
-            🌍
+            {GLOBES[globeIndex]}
           </div>
         </div>
 
@@ -501,6 +523,15 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
   const [expandedDays, setExpandedDays] = useState<Record<number, boolean>>({ 0: true });
   const [hotelsExpanded, setHotelsExpanded] = useState(false);
   const [restaurantsExpanded, setRestaurantsExpanded] = useState(false);
+  const [openBookingMenu, setOpenBookingMenu] = useState<string | null>(null);
+
+  // Chiudi il menu di prenotazione quando si clicca fuori
+  useEffect(() => {
+    if (!openBookingMenu) return;
+    const handler = () => setOpenBookingMenu(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openBookingMenu]);
 
   // Hero: usa destination + country come keyword per immagini più coerenti
   const heroKeyword = [inputs?.destination, inputs?.country].filter(Boolean).join(',') || plan.destinationOverview?.title || 'travel';
@@ -1137,14 +1168,16 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                                 ? (act.name || '').replace(/^pernottamento:\s*/i, '').trim()
                                 : '';
                               const bookingLink = (() => {
-                                if (!isPernottamento || !inputs) return null;
-                                const dayOffset = (day.day || 1) - 1;
-                                const checkin = new Date(inputs.startDate);
-                                checkin.setDate(checkin.getDate() + dayOffset);
-                                const checkout = new Date(checkin);
-                                checkout.setDate(checkout.getDate() + 1);
-                                const fmt = (d: Date) => d.toISOString().split('T')[0];
-                                return getBookingUrl(hotelName || searchDestination || '', act.location || searchDestination || '', fmt(checkin), fmt(checkout), inputs.people);
+                                if (!isPernottamento || !hotelName) return null;
+                                // Solo sito ufficiale dalle accommodations — nessun fallback a Booking.com
+                                for (const stop of (plan.accommodations || [])) {
+                                  for (const opt of (stop.options || [])) {
+                                    if (opt.name?.trim().toLowerCase() === hotelName.toLowerCase() && opt.bookingUrl) {
+                                      return opt.bookingUrl;
+                                    }
+                                  }
+                                }
+                                return null;
                               })();
                               const mapsLink = isRoute
                                 ? `https://www.google.com/maps/dir/${encodeURIComponent(act.location || searchDestination || '')}`
@@ -1538,29 +1571,51 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
                           <span className="font-bold text-lg">€{hotel.estimatedPricePerNight}</span>
                         </div>
                         <div className="flex gap-2">
-                          <a 
-                            href={(() => {
-                              // Calcola le date per la tappa specifica
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const key = `${i}-${j}`;
+                                setOpenBookingMenu(prev => prev === key ? null : key);
+                              }}
+                              className="text-xs font-bold uppercase tracking-widest text-brand-accent hover:underline flex items-center gap-1"
+                            >
+                              Prenota
+                            </button>
+                            {openBookingMenu === `${i}-${j}` && (() => {
                               let currentOffset = 0;
-                              for (let k = 0; k < i; k++) {
-                                currentOffset += plan.accommodations[k].nights || 0;
-                              }
+                              for (let k = 0; k < i; k++) currentOffset += plan.accommodations[k].nights || 0;
                               const start = new Date(inputs.startDate);
                               const stopStart = new Date(start);
                               stopStart.setDate(start.getDate() + currentOffset);
                               const stopEnd = new Date(stopStart);
                               stopEnd.setDate(stopStart.getDate() + (accommodationNights[i] || 1));
-                              
-                              const formatDate = (d: Date) => d.toISOString().split('T')[0];
-                              
-                              return getBookingUrl(hotel.name, stop.stopName, formatDate(stopStart), formatDate(stopEnd), inputs.people);
-                            })()} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-xs font-bold uppercase tracking-widest text-brand-accent hover:underline flex items-center"
-                          >
-                            Vedi
-                          </a>
+                              const fmt = (d: Date) => d.toISOString().split('T')[0];
+                              const urls = getBookingPlatformUrls(hotel.name, stop.stopName, fmt(stopStart), fmt(stopEnd), inputs.people);
+                              return (
+                                <div className="absolute bottom-8 left-0 z-20 bg-white rounded-2xl shadow-xl border border-brand-ink/10 p-3 flex flex-col gap-2 min-w-[160px]" onClick={e => e.stopPropagation()}>
+                                  {hotel.bookingUrl && (
+                                    <a href={hotel.bookingUrl} target="_blank" rel="noopener noreferrer"
+                                      className="flex items-center gap-2 text-xs font-bold text-brand-accent hover:text-brand-accent/70 transition-colors px-2 py-1.5 rounded-xl hover:bg-brand-paper border border-brand-accent/20 mb-1">
+                                      🏨 Sito ufficiale
+                                    </a>
+                                  )}
+                                  <a href={urls.booking} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-xs font-bold text-brand-ink/80 hover:text-brand-accent transition-colors px-2 py-1.5 rounded-xl hover:bg-brand-paper">
+                                    <img src="https://www.booking.com/favicon.ico" className="w-4 h-4" alt="" /> Booking.com
+                                  </a>
+                                  <a href={urls.expedia} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-xs font-bold text-brand-ink/80 hover:text-brand-accent transition-colors px-2 py-1.5 rounded-xl hover:bg-brand-paper">
+                                    <img src="https://www.expedia.it/favicon.ico" className="w-4 h-4" alt="" /> Expedia
+                                  </a>
+                                  <a href={urls.airbnb} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-xs font-bold text-brand-ink/80 hover:text-brand-accent transition-colors px-2 py-1.5 rounded-xl hover:bg-brand-paper">
+                                    <img src="https://www.airbnb.it/favicon.ico" className="w-4 h-4" alt="" /> Airbnb
+                                  </a>
+                                </div>
+                              );
+                            })()}</div>
                           <button 
                             onClick={() => setSelectedAccommodations(prev => ({ ...prev, [i]: hotel }))}
                             className={cn("text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full transition-colors",
