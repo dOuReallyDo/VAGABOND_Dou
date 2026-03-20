@@ -2056,7 +2056,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
       {/* Left Side - Image & Branding */}
       <div className="lg:w-5/12 relative min-h-[40vh] lg:min-h-screen flex flex-col justify-end p-8 md:p-16 overflow-hidden">
         <img 
-          src={`https://loremflickr.com/1080/1920/landscape,nature/all?lock=${bgSeed}`} 
+          src={`https://loremflickr.com/1080/1920/landscape,seascape,mountain,architecture?lock=${bgSeed}`}
           alt="Travel Inspiration" 
           className="absolute inset-0 w-full h-full object-cover"
         />

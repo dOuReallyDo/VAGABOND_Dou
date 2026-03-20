@@ -21,7 +21,11 @@
       "Read(//opt/homebrew/lib/node_modules/**)",
       "Read(//opt/homebrew/bin/**)",
       "Read(//opt/homebrew/**)",
-      "Bash(./node_modules/.bin/tsc --noEmit)"
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(sips -g pixelWidth -g pixelHeight \"/Users/roberta/Progetti Roberta/VAGABOND/public/leowanderlogo.png\")",
+      "Skill(commit-commands:commit-push-pr)",
+      "Skill(commit-commands:commit-push-pr:*)",
+      "Bash(gh auth:*)"
     ]
   }
 }
