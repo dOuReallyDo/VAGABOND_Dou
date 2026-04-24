@@ -20,6 +20,7 @@ import { TravelMap } from './components/TravelMap';
 import { useAuth } from './lib/auth';
 import { loadProfile, saveProfile, loadTrips, saveTrip, deleteTrip, toggleFavorite, migrateLocalTripsToSupabase, type SavedTrip } from './lib/storage';
 import { AuthForm } from './components/AuthForm';
+import { supabase } from './lib/supabase';
 import { ProfileForm, type TravelerProfileForm } from './components/ProfileForm';
 import { SavedTrips } from './components/SavedTrips';
 import { NoteSuggestions } from './components/NoteSuggestions';
@@ -2294,7 +2295,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                     </button>
                     <div className="border-t border-brand-ink/5">
                       <button
-                        onClick={async () => { setUserMenuOpen(false); await signOut(); }}
+                        onClick={async () => { setUserMenuOpen(false); await signOut(); setView('form'); setSavedTrips([]); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
                       >
                         <ArrowRight className="w-4 h-4 rotate-180" /> Logout
@@ -2703,6 +2704,143 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
           </motion.div>
         </div>
       </div>
+
+      {/* Profile Editor Modal */}
+      {showProfileEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowProfileEditor(false)}>
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowProfileEditor(false)} className="absolute top-4 right-4 text-brand-ink/40 hover:text-brand-ink text-2xl leading-none">&times;</button>
+            <h2 className="text-2xl font-serif text-brand-ink mb-6">🎭 Il mio profilo viaggiatore</h2>
+            {profileEditSuccess && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl mb-4 text-sm">Profilo aggiornato con successo!</div>
+            )}
+            {profileEditError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm">{profileEditError}</div>
+            )}
+            <ProfileForm
+              value={travelerProfile}
+              onChange={setTravelerProfile}
+              onContinue={async () => {
+                if (user && updateAuthProfile) {
+                  try {
+                    setProfileEditLoading(true);
+                    setProfileEditError(null);
+                    await updateAuthProfile({
+                      age_range: travelerProfile.ageRange,
+                      traveler_type: travelerProfile.travelerType,
+                      interests: travelerProfile.interests,
+                      pace: travelerProfile.pace,
+                      mobility: travelerProfile.mobility,
+                      familiarity: travelerProfile.familiarity,
+                    });
+                    setProfileEditSuccess(true);
+                    setTimeout(() => setProfileEditSuccess(false), 3000);
+                  } catch (err: any) {
+                    setProfileEditError(err.message || 'Errore nel salvataggio del profilo');
+                  } finally {
+                    setProfileEditLoading(false);
+                  }
+                }
+              }}
+            />
+            <button
+              onClick={() => setShowProfileEditor(false)}
+              className="mt-4 w-full bg-brand-accent text-white py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-all"
+              disabled={profileEditLoading}
+            >
+              {profileEditLoading ? 'Salvataggio...' : 'Chiudi'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showChangePassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowChangePassword(false)}>
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowChangePassword(false)} className="absolute top-4 right-4 text-brand-ink/40 hover:text-brand-ink text-2xl leading-none">&times;</button>
+            <h2 className="text-2xl font-serif text-brand-ink mb-6">🔑 Cambia password</h2>
+            {changePasswordSuccess ? (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                </div>
+                <p className="text-brand-ink mb-4">Password aggiornata con successo!</p>
+                <button onClick={() => { setShowChangePassword(false); setChangePasswordSuccess(false); }} className="w-full bg-brand-accent text-white py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-all">
+                  Chiudi
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (newPassword !== confirmNewPassword) {
+                  setChangePasswordError('Le password non coincidono');
+                  return;
+                }
+                if (newPassword.length < 6) {
+                  setChangePasswordError('La password deve avere almeno 6 caratteri');
+                  return;
+                }
+                setChangePasswordLoading(true);
+                setChangePasswordError(null);
+                try {
+                  const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+                  if (updateError) {
+                    setChangePasswordError(updateError.message);
+                  } else {
+                    setChangePasswordSuccess(true);
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                  }
+                } catch (err: any) {
+                  setChangePasswordError(err.message || 'Errore durante il cambio password');
+                } finally {
+                  setChangePasswordLoading(false);
+                }
+              }} className="space-y-5">
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    Nuova password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="Almeno 6 caratteri"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-base focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-brand-ink/40">
+                    Conferma password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="Ripeti la password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    className="w-full bg-transparent border-b-2 border-brand-ink/10 py-3 text-base focus:border-brand-accent outline-none transition-colors placeholder:text-brand-ink/20"
+                  />
+                </div>
+                {changePasswordError && (
+                  <div className="text-red-500 text-sm bg-red-50 p-3 rounded-xl">{changePasswordError}</div>
+                )}
+                <button
+                  type="submit"
+                  disabled={changePasswordLoading}
+                  className="w-full bg-brand-accent text-white py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-3 hover:bg-brand-accent/85 transition-all disabled:opacity-50 shadow-lg shadow-brand-accent/25"
+                >
+                  {changePasswordLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Aggiorna password'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Auth Modal */}
       {showAuth && (
