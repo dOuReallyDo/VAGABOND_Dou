@@ -29,7 +29,19 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 
-// Immagine da screenshot (thum.io) o fallback dinamico (loremflickr)
+// Curated Unsplash travel hero images (beautiful landscapes)
+const HERO_IMAGES = [
+  'https://images.unsplash.com/photo-1506929562872-bb42150a7d4e?w=1080&h=1920&fit=crop',  // sunset ocean
+  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5ed?w=1080&h=1920&fit=crop',  // tropical water
+  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1080&h=1920&fit=crop',  // beach
+  'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=1080&h=1920&fit=crop',  // coastline
+  'https://images.unsplash.com/photo-1520250495-b2c75c2b4a64?w=1080&h=1920&fit=crop',  // mountain lake
+  'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1080&h=1920&fit=crop',  // japan temple
+  'https://images.unsplash.com/photo-1500530855697-baf8e57e1740?w=1080&h=1920&fit=crop',  // colorful houses
+  'https://images.unsplash.com/photo-1504280390367-36f21b29e293?w=1080&h=1920&fit=crop',  // mountain sunset
+];
+
+// Immagine da screenshot o fallback dinamico (Unsplash)
 const getImageUrl = (item: any, keyword: string) => {
   // Se l'IA ha fornito un URL immagine che sembra valido, proviamo a usarlo
   const imageUrl = item?.imageUrl || item?.heroImageUrl;
@@ -40,22 +52,16 @@ const getImageUrl = (item: any, keyword: string) => {
     if (!bad.some((b) => url.includes(b))) return url;
   }
 
-  // Se c'è un sourceUrl o bookingUrl, potremmo usare thum.io, 
-  // ma loremflickr è più veloce e visivamente più gradevole per i viaggi
+  // Fallback to Unsplash source with keyword-based search
   const kw = encodeURIComponent(keyword.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().slice(0, 60));
-  
-  // Usiamo un seed basato sul nome per avere immagini consistenti ma diverse tra loro
-  const seed = Math.abs(keyword.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0)) % 1000;
-  
-  return `https://loremflickr.com/800/600/${kw},landscape/all?lock=${seed}`;
+  return `https://source.unsplash.com/800x600/?${kw},travel,landscape`;
 };
 
 const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   const target = e.target as HTMLImageElement;
   if (!target.dataset.fallback) {
     target.dataset.fallback = '1';
-    const seed = Math.floor(Math.random() * 1000);
-    target.src = `https://loremflickr.com/800/600/landscape,nature/all?lock=${seed}`;
+    target.src = `https://source.unsplash.com/800x600/?travel,landscape,nature`;
   }
 };
 
@@ -2191,7 +2197,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
       {/* Left Side - Image & Branding */}
       <div className="lg:w-5/12 relative min-h-[40vh] lg:min-h-screen flex flex-col justify-end p-8 md:p-16 overflow-hidden">
         <img 
-          src={`https://loremflickr.com/1080/1920/landscape,seascape,mountain,architecture?lock=${bgSeed}`}
+          src={HERO_IMAGES[bgSeed % HERO_IMAGES.length]}
           alt="Travel Inspiration" 
           className="absolute inset-0 w-full h-full object-cover"
         />
@@ -2630,10 +2636,31 @@ export default function App() {
   const [plan, setPlan] = useState<any>(null);
   const [lastInputs, setLastInputs] = useState<TravelInputs | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
-  // Auto-save trip when plan is generated and user is logged in
+  // Auto-save trip when plan is generated and user is logged in, prompt login if not
   useEffect(() => {
-    if (plan && lastInputs && user) {
+    if (plan && lastInputs) {
+      if (user) {
+        const tripName = plan.destinationOverview?.title || lastInputs.destination || 'Viaggio';
+        saveTrip({
+          trip_name: tripName,
+          destination: lastInputs.destination,
+          inputs: lastInputs,
+          plan,
+          is_favorite: false,
+        }, user.id).catch((err) => console.error('Auto-save trip failed:', err));
+      } else {
+        // User not logged in — prompt them to log in to save their trip
+        setShowLoginPrompt(true);
+      }
+    }
+  }, [plan]);
+
+  // Auto-save trip when user logs in after seeing the login prompt
+  useEffect(() => {
+    if (user && plan && lastInputs && showLoginPrompt) {
       const tripName = plan.destinationOverview?.title || lastInputs.destination || 'Viaggio';
       saveTrip({
         trip_name: tripName,
@@ -2641,9 +2668,11 @@ export default function App() {
         inputs: lastInputs,
         plan,
         is_favorite: false,
-      }, user.id).catch((err) => console.error('Auto-save trip failed:', err));
+      }, user.id).then(() => {
+        setShowLoginPrompt(false);
+      }).catch((err) => console.error('Auto-save trip failed:', err));
     }
-  }, [plan]);
+  }, [user]);
 
   const handleSubmit = async (inputs: TravelInputs) => {
     setLoading(true);
@@ -2693,24 +2722,77 @@ export default function App() {
     }
   };
 
-  if (loading) return <LoadingScreen step={loadingStep} progress={loadingProgress} />;
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-brand-paper flex items-center justify-center p-6">
-        <div className="max-w-md text-center">
-          <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-2xl mb-3">Errore</h2>
-          <p className="text-brand-ink/60 mb-6">{error}</p>
-          <button onClick={() => setError(null)} className="bg-brand-accent text-white px-6 py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-colors">
-            Riprova
-          </button>
+  return (
+    <>
+      {loading && <LoadingScreen step={loadingStep} progress={loadingProgress} />}
+      {error && !loading && (
+        <div className="min-h-screen bg-brand-paper flex items-center justify-center p-6">
+          <div className="max-w-md text-center">
+            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+            <h2 className="text-2xl mb-3">Errore</h2>
+            <p className="text-brand-ink/60 mb-6">{error}</p>
+            <button onClick={() => setError(null)} className="bg-brand-accent text-white px-6 py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-colors">
+              Riprova
+            </button>
+          </div>
         </div>
-      </div>
-    );
-  }
+      )}
+      {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} />}
+      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} />}
 
-  if (plan) return <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} />;
+      {/* Login prompt modal for saving trips when not authenticated */}
+      <AnimatePresence>
+        {showLoginPrompt && !user && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowLoginPrompt(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-brand-ink/40 hover:text-brand-ink text-2xl leading-none">&times;</button>
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-brand-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Plane className="w-8 h-8 text-brand-accent" />
+                </div>
+                <h3 className="text-xl font-serif text-brand-ink mb-2">Vuoi salvare il tuo viaggio?</h3>
+                <p className="text-sm text-brand-ink/60">Effettua l'accesso o registrati per salvare il tuo itinerario e ritrovarlo in qualsiasi momento.</p>
+              </div>
+              <div className="space-y-3">
+                <button
+                  onClick={() => { setShowLoginPrompt(false); setShowAuth(true); }}
+                  className="w-full bg-brand-accent text-white py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-all shadow-lg shadow-brand-accent/25"
+                >
+                  Accedi o Registrati
+                </button>
+                <button
+                  onClick={() => setShowLoginPrompt(false)}
+                  className="w-full text-brand-ink/50 py-2 text-sm hover:text-brand-ink/70 transition-colors"
+                >
+                  Continua senza salvare
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-  return <FormView onSubmit={handleSubmit} loading={loading} />;
+      {/* Auth Modal */}
+      {showAuth && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAuth(false)}>
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-brand-ink/40 hover:text-brand-ink text-2xl leading-none">&times;</button>
+            <AuthForm onAuthSuccess={() => setShowAuth(false)} />
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
