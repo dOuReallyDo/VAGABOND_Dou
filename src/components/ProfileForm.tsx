@@ -302,15 +302,17 @@ export function ProfileForm({ value, onChange, onContinue, compact = false }: Pr
         </div>
       </div>
 
-      {/* Continue button */}
-      <button
-        type="button"
-        onClick={onContinue}
-        className="w-full bg-brand-accent text-white py-4 rounded-2xl text-lg font-bold flex items-center justify-center gap-3 hover:bg-brand-accent/85 transition-all shadow-lg shadow-brand-accent/25 group"
-      >
-        Continua con il viaggio
-        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-      </button>
+      {/* Continue button — hidden in compact/modal mode */}
+      {!compact && (
+        <button
+          type="button"
+          onClick={onContinue}
+          className="w-full bg-brand-accent text-white py-4 rounded-2xl text-lg font-bold flex items-center justify-center gap-3 hover:bg-brand-accent/85 transition-all shadow-lg shadow-brand-accent/25 group"
+        >
+          Continua con il viaggio
+          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+        </button>
+      )}
     </motion.div>
   );
 }

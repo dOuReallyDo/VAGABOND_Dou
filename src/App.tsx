@@ -544,7 +544,8 @@ function AccommodationReviewer({ stops, inputs, onAdd }: { stops: any[]; inputs:
 
 // ─── RESULTS VIEW ─────────────────────────────────────────────────────────────
 
-function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: any; inputs: any; onReset: () => void; onModify: (request: string) => void; onUpdatePlan: (plan: any) => void }) {
+function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan, onShowAuth }: { plan: any; inputs: any; onReset: () => void; onModify: (request: string) => void; onUpdatePlan: (plan: any) => void; onShowAuth: () => void }) {
+  const { user, profile, signOut } = useAuth();
   const [modifyText, setModifyText] = useState("");
   const [selectedAccommodations, setSelectedAccommodations] = useState<Record<number, any>>({});
   const [accommodationNights, setAccommodationNights] = useState<Record<number, number>>({});
@@ -553,6 +554,8 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
   const [hotelsExpanded, setHotelsExpanded] = useState(false);
   const [restaurantsExpanded, setRestaurantsExpanded] = useState(false);
   const [openBookingMenu, setOpenBookingMenu] = useState<string | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [savedFeedback, setSavedFeedback] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Chiudi il menu di prenotazione quando si clicca fuori
   useEffect(() => {
@@ -561,6 +564,41 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, [openBookingMenu]);
+
+  // Chiudi il menu utente quando si clicca fuori
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handler = () => setUserMenuOpen(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [userMenuOpen]);
+
+  const handleSaveToTrips = async () => {
+    if (!user) {
+      // Persisti piano + inputs prima del redirect OAuth (sopravvive al reload)
+      try {
+        sessionStorage.setItem('vagabond_pending_plan', JSON.stringify({ plan, inputs }));
+      } catch (_) {}
+      onShowAuth();
+      return;
+    }
+    setSavedFeedback('saving');
+    try {
+      const tripName = plan.destinationOverview?.title || inputs?.destination || 'Viaggio';
+      await saveTrip({
+        trip_name: tripName,
+        destination: inputs?.destination || '',
+        inputs,
+        plan,
+        is_favorite: false,
+      }, user.id);
+      setSavedFeedback('saved');
+      setTimeout(() => setSavedFeedback('idle'), 3000);
+    } catch (err) {
+      console.error('Save trip error:', err);
+      setSavedFeedback('idle');
+    }
+  };
 
   // Hero: usa destination + country come keyword per immagini più coerenti
   const heroKeyword = [inputs?.destination, inputs?.country].filter(Boolean).join(',') || plan.destinationOverview?.title || 'travel';
@@ -846,6 +884,95 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
 
   return (
     <div className="min-h-screen bg-brand-paper pb-24" id="pdf-content">
+
+      {/* TOP BAR — sticky, visibile anche nella pagina itinerario */}
+      <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-brand-ink/5 print:hidden">
+        <div className="max-w-7xl mx-auto px-6 flex justify-between items-center py-2 gap-4">
+          {/* Sinistra */}
+          <button
+            onClick={onReset}
+            className="flex items-center gap-2 text-sm text-brand-ink/70 hover:text-brand-ink transition-colors px-3 py-1.5 rounded-lg hover:bg-brand-ink/5"
+          >
+            <ArrowRight className="rotate-180 w-4 h-4" /> Nuova ricerca
+          </button>
+
+          {/* Destra */}
+          <div className="flex items-center gap-2">
+            {/* Salva nei miei viaggi */}
+            <button
+              onClick={handleSaveToTrips}
+              disabled={savedFeedback === 'saving'}
+              className={`flex items-center gap-2 text-sm px-4 py-1.5 rounded-full font-medium transition-all shadow-sm ${
+                savedFeedback === 'saved'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-brand-accent text-white hover:bg-brand-accent/90'
+              }`}
+            >
+              {savedFeedback === 'saved' ? (
+                <><CheckCircle2 className="w-4 h-4" /> Salvato!</>
+              ) : savedFeedback === 'saving' ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Salvataggio...</>
+              ) : (
+                <><Download className="w-4 h-4" /> Salva Itinerario</>
+              )}
+            </button>
+
+            {/* Scarica HTML */}
+            <button
+              onClick={handleSaveItinerary}
+              title="Scarica come file"
+              className="flex items-center gap-1.5 text-sm text-brand-ink/50 hover:text-brand-ink transition-colors px-2 py-1.5 rounded-lg hover:bg-brand-ink/5"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+
+            {/* User menu */}
+            {user ? (
+              <div className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setUserMenuOpen(!userMenuOpen); }}
+                  className="flex items-center gap-2 text-sm text-brand-ink/70 hover:text-brand-ink transition-colors px-3 py-1.5 rounded-lg hover:bg-brand-ink/5"
+                >
+                  <div className="w-7 h-7 bg-brand-accent/20 rounded-full flex items-center justify-center text-brand-accent text-xs font-bold">
+                    {(user.email || 'U')[0].toUpperCase()}
+                  </div>
+                  <span className="hidden md:inline max-w-[140px] truncate">{profile?.display_name || user.email}</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-brand-ink/5 py-1 overflow-hidden z-50">
+                    <div className="px-4 py-2 border-b border-brand-ink/5">
+                      <p className="text-xs text-brand-ink/40 truncate">{user.email}</p>
+                    </div>
+                    <button
+                      onClick={() => { setUserMenuOpen(false); onReset(); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-brand-ink/70 hover:bg-brand-ink/5 hover:text-brand-ink transition-colors flex items-center gap-2"
+                    >
+                      <MapPin className="w-4 h-4" /> I miei viaggi
+                    </button>
+                    <div className="border-t border-brand-ink/5">
+                      <button
+                        onClick={async () => { setUserMenuOpen(false); await signOut(); onReset(); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
+                      >
+                        <LogOut className="w-4 h-4" /> Logout
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={onShowAuth}
+                className="flex items-center gap-1.5 text-sm text-brand-ink/50 hover:text-brand-accent transition-colors px-3 py-1.5 rounded-lg hover:bg-brand-accent/5"
+              >
+                <Users className="w-4 h-4" /> Accedi
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* HERO */}
       <section className="relative h-[85vh] print:h-auto print:min-h-[300px] overflow-hidden">
         <img
@@ -856,21 +983,6 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-brand-paper print:hidden" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent print:hidden" />
-
-        <div className="absolute top-8 left-8 flex gap-4 z-10 print:hidden">
-          <button
-            onClick={onReset}
-            className="bg-white/90 backdrop-blur px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-white transition-colors shadow-md"
-          >
-            <ArrowRight className="rotate-180 w-4 h-4" /> Nuova ricerca
-          </button>
-          <button
-            onClick={handleSaveItinerary}
-            className="bg-brand-accent text-white px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-brand-accent/90 transition-colors shadow-md"
-          >
-            <Download className="w-4 h-4" /> Salva Itinerario
-          </button>
-        </div>
 
         <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-16 lg:p-24 print:relative print:p-8 print:bg-white">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl">
@@ -2720,36 +2832,45 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
             <ProfileForm
               value={travelerProfile}
               onChange={setTravelerProfile}
-              onContinue={async () => {
-                if (user && updateAuthProfile) {
-                  try {
-                    setProfileEditLoading(true);
-                    setProfileEditError(null);
-                    await updateAuthProfile({
-                      age_range: travelerProfile.ageRange,
-                      traveler_type: travelerProfile.travelerType,
-                      interests: travelerProfile.interests,
-                      pace: travelerProfile.pace,
-                      mobility: travelerProfile.mobility,
-                      familiarity: travelerProfile.familiarity,
-                    });
-                    setProfileEditSuccess(true);
-                    setTimeout(() => setProfileEditSuccess(false), 3000);
-                  } catch (err: any) {
-                    setProfileEditError(err.message || 'Errore nel salvataggio del profilo');
-                  } finally {
-                    setProfileEditLoading(false);
-                  }
-                }
-              }}
+              onContinue={() => {}}  /* hide built-in button */
+              compact
             />
-            <button
-              onClick={() => setShowProfileEditor(false)}
-              className="mt-4 w-full bg-brand-accent text-white py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-all"
-              disabled={profileEditLoading}
-            >
-              {profileEditLoading ? 'Salvataggio...' : 'Chiudi'}
-            </button>
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setShowProfileEditor(false)}
+                className="flex-1 py-3 rounded-2xl font-bold border-2 border-brand-ink/10 text-brand-ink/60 hover:border-brand-ink/30 hover:text-brand-ink transition-all"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={async () => {
+                  if (user && updateAuthProfile) {
+                    try {
+                      setProfileEditLoading(true);
+                      setProfileEditError(null);
+                      await updateAuthProfile({
+                        age_range: travelerProfile.ageRange,
+                        traveler_type: travelerProfile.travelerType,
+                        interests: travelerProfile.interests,
+                        pace: travelerProfile.pace,
+                        mobility: travelerProfile.mobility,
+                        familiarity: travelerProfile.familiarity,
+                      });
+                      setProfileEditSuccess(true);
+                      setTimeout(() => { setProfileEditSuccess(false); setShowProfileEditor(false); }, 1500);
+                    } catch (err: any) {
+                      setProfileEditError(err.message || 'Errore nel salvataggio del profilo');
+                    } finally {
+                      setProfileEditLoading(false);
+                    }
+                  }
+                }}
+                disabled={profileEditLoading}
+                className="flex-1 bg-brand-accent text-white py-3 rounded-2xl font-bold hover:bg-brand-accent/85 transition-all disabled:opacity-50 shadow-lg shadow-brand-accent/25 flex items-center justify-center gap-2"
+              >
+                {profileEditLoading ? <><Loader2 className="w-5 h-5 animate-spin" /> Salvataggio...</> : 'Salva'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2887,9 +3008,32 @@ export default function App() {
     }
   }, [plan]);
 
-  // Auto-save trip when user logs in after seeing the login prompt
+  // Dopo login: salva il piano pendente (da "Salva Itinerario" cliccato da utente non loggato)
   useEffect(() => {
-    if (user && plan && lastInputs && showLoginPrompt) {
+    if (!user) return;
+
+    // Controlla sessionStorage per un piano salvato prima del login/redirect OAuth
+    const raw = sessionStorage.getItem('vagabond_pending_plan');
+    if (raw) {
+      sessionStorage.removeItem('vagabond_pending_plan');
+      try {
+        const { plan: pendingPlan, inputs: pendingInputs } = JSON.parse(raw);
+        if (plan && lastInputs) {
+          // Login email/password: il piano è ancora in stato React — salvalo direttamente
+          const tripName = plan.destinationOverview?.title || lastInputs.destination || 'Viaggio';
+          saveTrip({ trip_name: tripName, destination: lastInputs.destination, inputs: lastInputs, plan, is_favorite: false }, user.id)
+            .catch(err => console.error('Post-login save failed:', err));
+        } else if (pendingPlan) {
+          // OAuth redirect: pagina ricaricata, ripristina il piano (l'effect [plan] lo salverà)
+          setLastInputs(pendingInputs);
+          setPlan(pendingPlan);
+        }
+      } catch (_) {}
+      return;
+    }
+
+    // Fallback: salva se il prompt di login era visibile (vecchio flusso)
+    if (plan && lastInputs && showLoginPrompt) {
       const tripName = plan.destinationOverview?.title || lastInputs.destination || 'Viaggio';
       saveTrip({
         trip_name: tripName,
@@ -2966,7 +3110,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} />}
+      {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} onShowAuth={() => setShowAuth(true)} />}
       {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} />}
 
       {/* Login prompt modal for saving trips when not authenticated */}

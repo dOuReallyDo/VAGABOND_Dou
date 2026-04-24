@@ -94,9 +94,20 @@ L'app sarà disponibile su `http://localhost:3000`
 ## 🔐 Autenticazione
 
 - **Email + Password**: Registrazione e login standard
-- **Google OAuth**: Login rapido con account Google
+- **Google OAuth**: Login rapido con account Google (richiede configurazione in Supabase Dashboard)
 - **Guest Mode**: Funziona senza login — profilo e viaggi salvati in localStorage
 - **Migrazione**: Al primo login, i dati localStorage vengono migrati su Supabase
+
+### Flusso User Menu (loggati)
+
+Dal menu in alto a destra (avatar + email):
+- **🎭 Il mio profilo viaggiatore** → Modal con ProfileForm (solo "Salva" + "Annulla"), salva su Supabase `profiles`
+- **📍 I miei viaggi** → Vista saved trips da Supabase
+- **🔑 Cambia password** → Modal con nuova password + conferma, usa `supabase.auth.updateUser()`
+- **🚪 Logout** → `signOut()` + clear localStorage session + reset UI (view→form, trips→[])
+
+### Bug Noti
+- **Google OAuth**: Non configurato in Supabase Dashboard — serve OAuth client ID, secret e redirect URL
 
 ## 🧑 Profilo Viaggiatore
 
