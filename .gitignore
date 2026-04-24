@@ -17,3 +17,4 @@ node_modules
 dist
 apps/widget/dist
 .env.local
+.vercel
