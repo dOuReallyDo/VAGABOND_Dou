@@ -2066,7 +2066,7 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
 function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean }) {
   const { user, profile, signOut, updateProfile: updateAuthProfile } = useAuth();
   const [bgSeed] = useState(() => Math.floor(Math.random() * 1000));
-  const [formStep, setFormStep] = useState<'profile' | 'travel'>('profile');
+  const [formStep, setFormStep] = useState<'profile' | 'travel'>('travel');
   const [view, setView] = useState<'form' | 'trips'>('form');
   const [showAuth, setShowAuth] = useState(false);
   const [travelerProfile, setTravelerProfile] = useState<TravelerProfileForm>({
@@ -2250,39 +2250,70 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
             Il tuo concierge digitale per viaggi autentici e indimenticabili.
           </p>
         </motion.div>
-        {/* Auth UI */}
-        <div className="relative z-10 mt-6">
-          {user ? (
-            <div className="flex flex-col items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3">
-              <span className="text-white/90 text-sm font-medium">{user.email}</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setView(view === 'trips' ? 'form' : 'trips')}
-                  className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  I miei viaggi
-                </button>
-                <button
-                  onClick={async () => { await signOut(); }}
-                  className="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowAuth(true)}
-              className="text-xs bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors backdrop-blur-sm"
-            >
-              Accedi
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Right Side - Form */}
-      <div className="lg:w-7/12 flex-1 overflow-y-auto">
+      <div className="lg:w-7/12 flex-1 overflow-y-auto relative">
+        {/* User Menu - TOP RIGHT */}
+        <div className="sticky top-0 z-40 bg-brand-paper/80 backdrop-blur-md border-b border-brand-ink/5">
+          <div className="max-w-3xl mx-auto px-6 md:px-12 lg:px-16 xl:px-20 flex justify-end items-center py-2">
+            {user ? (
+              <div className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setUserMenuOpen(!userMenuOpen); }}
+                  className="flex items-center gap-2 text-sm text-brand-ink/70 hover:text-brand-ink transition-colors px-3 py-1.5 rounded-lg hover:bg-brand-ink/5"
+                >
+                  <div className="w-7 h-7 bg-brand-accent/20 rounded-full flex items-center justify-center text-brand-accent text-xs font-bold">
+                    {(user.email || 'U')[0].toUpperCase()}
+                  </div>
+                  <span className="hidden md:inline max-w-[150px] truncate">{profile?.display_name || user.email}</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-brand-ink/5 py-1 overflow-hidden">
+                    <div className="px-4 py-2 border-b border-brand-ink/5">
+                      <p className="text-xs text-brand-ink/40 truncate">{user.email}</p>
+                    </div>
+                    <button
+                      onClick={() => { setUserMenuOpen(false); setShowProfileEditor(true); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-brand-ink/70 hover:bg-brand-ink/5 hover:text-brand-ink transition-colors flex items-center gap-2"
+                    >
+                      <Users className="w-4 h-4" /> Il mio profilo viaggiatore
+                    </button>
+                    <button
+                      onClick={() => { setUserMenuOpen(false); setView('trips'); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-brand-ink/70 hover:bg-brand-ink/5 hover:text-brand-ink transition-colors flex items-center gap-2"
+                    >
+                      <MapPin className="w-4 h-4" /> I miei viaggi
+                    </button>
+                    <button
+                      onClick={() => { setUserMenuOpen(false); setShowChangePassword(true); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-brand-ink/70 hover:bg-brand-ink/5 hover:text-brand-ink transition-colors flex items-center gap-2"
+                    >
+                      <KeyRound className="w-4 h-4" /> Cambia password
+                    </button>
+                    <div className="border-t border-brand-ink/5">
+                      <button
+                        onClick={async () => { setUserMenuOpen(false); await signOut(); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
+                      >
+                        <ArrowRight className="w-4 h-4 rotate-180" /> Logout
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAuth(true)}
+                className="text-sm text-brand-ink/50 hover:text-brand-accent transition-colors px-3 py-1.5 rounded-lg hover:bg-brand-accent/5 flex items-center gap-1.5"
+              >
+                <Users className="w-4 h-4" /> Accedi
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="max-w-3xl mx-auto p-6 md:p-12 lg:p-16 xl:p-20">
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
 
@@ -2300,11 +2331,12 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
             {/* Profile Step */}
             {view === 'form' && formStep === 'profile' && (
               <>
-                <div className="bg-brand-accent/5 border-2 border-brand-accent/20 rounded-2xl p-6 mb-8">
-                  <h2 className="text-3xl md:text-4xl mb-2 font-serif">🎭 Dimmi chi sei per cercare un viaggio solo per te!</h2>
-                  <p className="text-brand-ink/60 text-sm leading-relaxed">
-                    Il tuo profilo viaggiatore mi aiuta a personalizzare ogni dettaglio del tuo itinerario: 
-                    ritmo, interesse, mobilità e tanto altro. Rispondi alle domande e io creerò un viaggio su misura per te.
+                <div className="bg-gradient-to-br from-brand-accent/10 to-brand-accent/5 border-2 border-brand-accent/30 rounded-3xl p-8 mb-8 shadow-lg shadow-brand-accent/5">
+                  <h2 className="text-4xl md:text-5xl mb-3 font-serif text-brand-ink leading-tight">
+                    🎭 Dimmi chi sei<span className="text-brand-accent"> per cercare un viaggio solo per te!</span>
+                  </h2>
+                  <p className="text-brand-ink/60 text-base leading-relaxed">
+                    Il tuo profilo viaggiatore rende ogni itinerario unico: ritmo, interessi, stile di viaggio. <strong className="text-brand-ink">Compila e continueremo insieme.</strong>
                   </p>
                 </div>
                 <ProfileForm
@@ -2344,9 +2376,9 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
               <button
                 type="button"
                 onClick={() => setFormStep('profile')}
-                className="text-xs text-brand-accent hover:underline flex items-center gap-1"
+                className="flex items-center gap-2 bg-brand-accent/10 hover:bg-brand-accent/20 text-brand-accent px-4 py-2 rounded-xl text-sm font-medium transition-colors border border-brand-accent/20"
               >
-                <Users className="w-3 h-3" /> Modifica profilo viaggiatore
+                <Users className="w-4 h-4" /> ✨ Crea/modifica il tuo profilo viaggiatore
               </button>
             </div>
 
