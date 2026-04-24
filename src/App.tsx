@@ -591,8 +591,8 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
       onShowAuth();
       return;
     }
-    // Se già salvato (auto-save), mostra solo il feedback senza risalvare
-    if (savedFeedback === 'saved') return;
+    // Evita doppio salvataggio se già in corso o già completato
+    if (savedFeedback !== 'idle') return;
     setSavedFeedback('saving');
     try {
       const tripName = plan.destinationOverview?.title || inputs?.destination || 'Viaggio';
@@ -604,7 +604,7 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
         is_favorite: false,
       }, user.id);
       setSavedFeedback('saved');
-      setTimeout(() => setSavedFeedback('idle'), 3000);
+      // Mantiene "Salvato!" permanentemente — non torna a idle così non si può ri-cliccare
     } catch (err) {
       console.error('Save trip error:', err);
       setSavedFeedback('idle');
@@ -2187,7 +2187,7 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
 
 // ─── FORM VIEW ────────────────────────────────────────────────────────────────
 
-function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean; initialShowTrips?: boolean; onShowTripsDone?: () => void }) {
+function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoadTrip }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean; initialShowTrips?: boolean; onShowTripsDone?: () => void; onLoadTrip?: (trip: SavedTrip) => void }) {
   const { user, profile, signOut, updateProfile: updateAuthProfile } = useAuth();
   const [bgSeed] = useState(() => Math.floor(Math.random() * 1000));
   const [formStep, setFormStep] = useState<'profile' | 'travel'>('travel');
@@ -2453,7 +2453,7 @@ function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone }: { on
             {view === 'trips' && (
               <SavedTrips
                 trips={savedTrips}
-                onLoad={(_trip) => { setView('form'); }}
+                onLoad={(trip) => { onLoadTrip?.(trip); }}
                 onDelete={async (tripId) => { await deleteTrip(tripId, user?.id); const trips = await loadTrips(user?.id); setSavedTrips(trips); }}
                 onToggleFavorite={async (tripId, isFav) => { await toggleFavorite(tripId, isFav, user?.id); const trips = await loadTrips(user?.id); setSavedTrips(trips); }}
                 onBack={() => setView('form')}
@@ -3007,29 +3007,16 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  // Segnale per comunicare a ResultsView che il piano è stato salvato (auto-save o post-login)
+  // Segnale per comunicare a ResultsView che il piano è stato salvato (post-login)
   const [planJustSaved, setPlanJustSaved] = useState(false);
   // Quando l'utente dalla ResultsView vuole vedere i suoi viaggi
   const [showSavedTripsFromResults, setShowSavedTripsFromResults] = useState(false);
 
-  // Auto-save trip when plan is generated and user is logged in, prompt login if not
+  // NON auto-salviamo alla generazione: il salvataggio è esplicito (pulsante "Salva Itinerario")
+  // Se l'utente non è loggato mostriamo il prompt di login
   useEffect(() => {
-    if (plan && lastInputs) {
-      if (user) {
-        const tripName = plan.destinationOverview?.title || lastInputs.destination || 'Viaggio';
-        saveTrip({
-          trip_name: tripName,
-          destination: lastInputs.destination,
-          inputs: lastInputs,
-          plan,
-          is_favorite: false,
-        }, user.id)
-          .then(() => setPlanJustSaved(true))
-          .catch((err) => console.error('Auto-save trip failed:', err));
-      } else {
-        // User not logged in — prompt them to log in to save their trip
-        setShowLoginPrompt(true);
-      }
+    if (plan && lastInputs && !user) {
+      setShowLoginPrompt(true);
     }
   }, [plan]);
 
@@ -3050,9 +3037,10 @@ export default function App() {
             .then(() => setPlanJustSaved(true))
             .catch(err => console.error('Post-login save failed:', err));
         } else if (pendingPlan) {
-          // OAuth redirect: pagina ricaricata, ripristina il piano (l'effect [plan] lo salverà)
+          // OAuth redirect: pagina ricaricata, ripristina il piano
           setLastInputs(pendingInputs);
           setPlan(pendingPlan);
+          // Il salvataggio verrà fatto dal pulsante o dall'effect post-login alla prossima iterazione
         }
       } catch (_) {}
       return;
@@ -3138,7 +3126,7 @@ export default function App() {
         </div>
       )}
       {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onShowTrips={() => { setPlan(null); setShowSavedTripsFromResults(true); }} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} onShowAuth={() => setShowAuth(true)} planJustSaved={planJustSaved} onPlanJustSavedAck={() => setPlanJustSaved(false)} />}
-      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} />}
+      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} onLoadTrip={(trip) => { setLastInputs(trip.inputs); setPlan(trip.plan); }} />}
 
       {/* Login prompt modal for saving trips when not authenticated */}
       <AnimatePresence>
