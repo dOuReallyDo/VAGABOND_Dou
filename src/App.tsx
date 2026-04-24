@@ -9,7 +9,8 @@ import {
   Users, Euro, MapPin, Calendar, Home, MessageSquare, Plane, Hotel,
   Sun, ShieldCheck, ArrowRight, Plus, Minus, Loader2, Star,
   CheckCircle2, AlertTriangle, ChevronRight, ExternalLink, Utensils,
-  Clock, Lightbulb, Smartphone, Train, Download, Search, Car
+  Clock, Lightbulb, Smartphone, Train, Download, Search, Car,
+  User as UserIcon, LogOut, KeyRound, ChevronDown, X
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -29,9 +30,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 
-// Curated Unsplash travel hero images (beautiful landscapes)
+// Load local personal travel photos from immagini/ folder via Vite glob import
+const localHeroImages = import.meta.glob<string>(
+  '../immagini/*.{jpeg,jpg,png,webp,JPEG,JPG,PNG,WEBP}',
+  { eager: true, as: 'url' }
+);
+const localHeroImageUrls = Object.values(localHeroImages) as string[];
+
+// Fallback Unsplash hero images (used only if no local images found)
 const HERO_IMAGES = [
-  'https://images.unsplash.com/photo-1506929562872-bb42150a7d4e?w=1080&h=1920&fit=crop',  // sunset ocean
+  'https://images.unsplash.com/photo-1506929562872-bb4215037d4e?w=1080&h=1920&fit=crop',  // sunset ocean
   'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5ed?w=1080&h=1920&fit=crop',  // tropical water
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1080&h=1920&fit=crop',  // beach
   'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=1080&h=1920&fit=crop',  // coastline
@@ -40,6 +48,12 @@ const HERO_IMAGES = [
   'https://images.unsplash.com/photo-1500530855697-baf8e57e1740?w=1080&h=1920&fit=crop',  // colorful houses
   'https://images.unsplash.com/photo-1504280390367-36f21b29e293?w=1080&h=1920&fit=crop',  // mountain sunset
 ];
+
+// Pick one hero image: prefer local photos, fallback to Unsplash
+const getHeroImage = (seed: number) => {
+  const pool = localHeroImageUrls.length > 0 ? localHeroImageUrls : HERO_IMAGES;
+  return pool[seed % pool.length];
+};
 
 // Immagine da screenshot o fallback dinamico (Unsplash)
 const getImageUrl = (item: any, keyword: string) => {
@@ -52,16 +66,17 @@ const getImageUrl = (item: any, keyword: string) => {
     if (!bad.some((b) => url.includes(b))) return url;
   }
 
-  // Fallback to Unsplash source with keyword-based search
-  const kw = encodeURIComponent(keyword.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().slice(0, 60));
-  return `https://source.unsplash.com/800x600/?${kw},travel,landscape`;
+  // Fallback to picsum.photos with keyword-based seed for consistent beautiful images
+  const kw = keyword.toLowerCase().replace(/[^a-z0-9]/g, '').trim().slice(0, 60);
+  return `https://picsum.photos/seed/${kw}/800/600`;
 };
 
 const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   const target = e.target as HTMLImageElement;
   if (!target.dataset.fallback) {
     target.dataset.fallback = '1';
-    target.src = `https://source.unsplash.com/800x600/?travel,landscape,nature`;
+    const randomSeed = Math.random().toString(36).slice(2, 10);
+    target.src = `https://picsum.photos/seed/${randomSeed}/800/600`;
   }
 };
 
@@ -2049,9 +2064,9 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
 // ─── FORM VIEW ────────────────────────────────────────────────────────────────
 
 function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean }) {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, updateProfile: updateAuthProfile } = useAuth();
   const [bgSeed] = useState(() => Math.floor(Math.random() * 1000));
-  const [formStep, setFormStep] = useState<'profile' | 'travel'>('travel');
+  const [formStep, setFormStep] = useState<'profile' | 'travel'>('profile');
   const [view, setView] = useState<'form' | 'trips'>('form');
   const [showAuth, setShowAuth] = useState(false);
   const [travelerProfile, setTravelerProfile] = useState<TravelerProfileForm>({
@@ -2063,6 +2078,17 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
     familiarity: 'Mai stato qui',
   });
   const [savedTrips, setSavedTrips] = useState<SavedTrip[]>([]);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showProfileEditor, setShowProfileEditor] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState(false);
+  const [profileEditLoading, setProfileEditLoading] = useState(false);
+  const [profileEditSuccess, setProfileEditSuccess] = useState(false);
+  const [profileEditError, setProfileEditError] = useState<string | null>(null);
 
   // Load profile from auth context into travelerProfile when available
   useEffect(() => {
@@ -2086,6 +2112,14 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
       setSavedTrips(trips);
     })();
   }, [user]);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handler = (e: MouseEvent) => setUserMenuOpen(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [userMenuOpen]);
 
   const [inputs, setInputs] = useState<TravelInputs & { budgetInput: string }>({
     people: { adults: 2, children: [] },
@@ -2197,7 +2231,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
       {/* Left Side - Image & Branding */}
       <div className="lg:w-5/12 relative min-h-[40vh] lg:min-h-screen flex flex-col justify-end p-8 md:p-16 overflow-hidden">
         <img 
-          src={HERO_IMAGES[bgSeed % HERO_IMAGES.length]}
+          src={getHeroImage(bgSeed)}
           alt="Travel Inspiration" 
           className="absolute inset-0 w-full h-full object-cover"
         />
@@ -2266,12 +2300,37 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
             {/* Profile Step */}
             {view === 'form' && formStep === 'profile' && (
               <>
-                <h2 className="text-3xl md:text-4xl mb-2 font-serif">Il tuo profilo viaggiatore</h2>
-                <p className="text-brand-ink/50 mb-10 text-sm">Raccontami come viaggi, personalizzerò il piano per te.</p>
+                <div className="bg-brand-accent/5 border-2 border-brand-accent/20 rounded-2xl p-6 mb-8">
+                  <h2 className="text-3xl md:text-4xl mb-2 font-serif">🎭 Dimmi chi sei per cercare un viaggio solo per te!</h2>
+                  <p className="text-brand-ink/60 text-sm leading-relaxed">
+                    Il tuo profilo viaggiatore mi aiuta a personalizzare ogni dettaglio del tuo itinerario: 
+                    ritmo, interesse, mobilità e tanto altro. Rispondi alle domande e io creerò un viaggio su misura per te.
+                  </p>
+                </div>
                 <ProfileForm
                   value={travelerProfile}
                   onChange={setTravelerProfile}
-                  onContinue={() => setFormStep('travel')}
+                  onContinue={async () => {
+                    // Save profile to Supabase if user is logged in
+                    if (user && updateAuthProfile) {
+                      try {
+                        setProfileEditLoading(true);
+                        await updateAuthProfile({
+                          age_range: travelerProfile.ageRange,
+                          traveler_type: travelerProfile.travelerType,
+                          interests: travelerProfile.interests,
+                          pace: travelerProfile.pace,
+                          mobility: travelerProfile.mobility,
+                          familiarity: travelerProfile.familiarity,
+                        });
+                      } catch (err) {
+                        console.error('Error saving profile:', err);
+                      } finally {
+                        setProfileEditLoading(false);
+                      }
+                    }
+                    setFormStep('travel');
+                  }}
                 />
               </>
             )}
