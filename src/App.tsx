@@ -16,9 +16,15 @@ import { twMerge } from 'tailwind-merge';
 import * as XLSX from 'xlsx';
 import { generateTravelPlan, summarizeAccommodationReviews, getDestinationCountries, type TravelInputs } from './services/travelService';
 import { TravelMap } from './components/TravelMap';
+import { useAuth } from './lib/auth';
+import { loadProfile, saveProfile, loadTrips, saveTrip, deleteTrip, toggleFavorite, migrateLocalTripsToSupabase, type SavedTrip } from './lib/storage';
+import { AuthForm } from './components/AuthForm';
+import { ProfileForm, type TravelerProfileForm } from './components/ProfileForm';
+import { SavedTrips } from './components/SavedTrips';
+import { NoteSuggestions } from './components/NoteSuggestions';
 import 'leaflet/dist/leaflet.css';
 
-function cn(...inputs: ClassValue[]) {
+export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
@@ -2037,7 +2043,44 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan }: { plan: 
 // ─── FORM VIEW ────────────────────────────────────────────────────────────────
 
 function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean }) {
+  const { user, profile, signOut } = useAuth();
   const [bgSeed] = useState(() => Math.floor(Math.random() * 1000));
+  const [formStep, setFormStep] = useState<'profile' | 'travel'>('travel');
+  const [view, setView] = useState<'form' | 'trips'>('form');
+  const [showAuth, setShowAuth] = useState(false);
+  const [travelerProfile, setTravelerProfile] = useState<TravelerProfileForm>({
+    ageRange: '',
+    travelerType: '',
+    interests: [],
+    pace: 'Equilibrato',
+    mobility: 'Nessuna limitazione',
+    familiarity: 'Mai stato qui',
+  });
+  const [savedTrips, setSavedTrips] = useState<SavedTrip[]>([]);
+
+  // Load profile from auth context into travelerProfile when available
+  useEffect(() => {
+    if (profile) {
+      setTravelerProfile((prev) => ({
+        ...prev,
+        ageRange: profile.age_range || prev.ageRange,
+        travelerType: profile.traveler_type || prev.travelerType,
+        interests: profile.interests || prev.interests,
+        pace: profile.pace || prev.pace,
+        mobility: profile.mobility || prev.mobility,
+        familiarity: profile.familiarity || prev.familiarity,
+      }));
+    }
+  }, [profile]);
+
+  // Load saved trips on mount & when user changes
+  useEffect(() => {
+    (async () => {
+      const trips = await loadTrips(user?.id);
+      setSavedTrips(trips);
+    })();
+  }, [user]);
+
   const [inputs, setInputs] = useState<TravelInputs & { budgetInput: string }>({
     people: { adults: 2, children: [] },
     budget: 2000,
@@ -2138,6 +2181,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
       ...inputs,
       budget: perPerson * totalPeople,
       accommodationType: selectedAccommodations.join(', '),
+      travelerProfile,
     };
     onSubmit(finalInputs);
   };
@@ -2166,14 +2210,80 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
             Il tuo concierge digitale per viaggi autentici e indimenticabili.
           </p>
         </motion.div>
+        {/* Auth UI */}
+        <div className="relative z-10 mt-6">
+          {user ? (
+            <div className="flex flex-col items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3">
+              <span className="text-white/90 text-sm font-medium">{user.email}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setView(view === 'trips' ? 'form' : 'trips')}
+                  className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  I miei viaggi
+                </button>
+                <button
+                  onClick={async () => { await signOut(); }}
+                  className="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAuth(true)}
+              className="text-xs bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors backdrop-blur-sm"
+            >
+              Accedi
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Right Side - Form */}
       <div className="lg:w-7/12 flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto p-6 md:p-12 lg:p-16 xl:p-20">
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+
+            {/* Saved Trips View */}
+            {view === 'trips' && (
+              <SavedTrips
+                trips={savedTrips}
+                onLoad={(_trip) => { setView('form'); }}
+                onDelete={async (tripId) => { await deleteTrip(tripId, user?.id); const trips = await loadTrips(user?.id); setSavedTrips(trips); }}
+                onToggleFavorite={async (tripId, isFav) => { await toggleFavorite(tripId, isFav, user?.id); const trips = await loadTrips(user?.id); setSavedTrips(trips); }}
+                onBack={() => setView('form')}
+              />
+            )}
+
+            {/* Profile Step */}
+            {view === 'form' && formStep === 'profile' && (
+              <>
+                <h2 className="text-3xl md:text-4xl mb-2 font-serif">Il tuo profilo viaggiatore</h2>
+                <p className="text-brand-ink/50 mb-10 text-sm">Raccontami come viaggi, personalizzerò il piano per te.</p>
+                <ProfileForm
+                  value={travelerProfile}
+                  onChange={setTravelerProfile}
+                  onContinue={() => setFormStep('travel')}
+                />
+              </>
+            )}
+
+            {/* Travel Form (default) */}
+            {view === 'form' && formStep === 'travel' && (
+            <>
             <h2 className="text-3xl md:text-4xl mb-2 font-serif">Crea il tuo itinerario</h2>
             <p className="text-brand-ink/50 mb-10 text-sm">Raccontami i tuoi desideri, penserò io a tutto il resto.</p>
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => setFormStep('profile')}
+                className="text-xs text-brand-accent hover:underline flex items-center gap-1"
+              >
+                <Users className="w-3 h-3" /> Modifica profilo viaggiatore
+              </button>
+            </div>
 
             <form onSubmit={handleSubmit} className="space-y-10">
               {/* Partenza & Destinazione */}
@@ -2470,6 +2580,7 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                   value={inputs.notes}
                   onChange={(e) => setInputs((p) => ({ ...p, notes: e.target.value }))}
                 />
+                <NoteSuggestions selectedNotes={inputs.notes || ''} onChange={(n) => setInputs((p) => ({ ...p, notes: n }))} />
               </div>
 
               <button
@@ -2490,22 +2601,49 @@ function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => v
                 )}
               </button>
             </form>
+            </>
+            )}
           </motion.div>
         </div>
       </div>
+
+      {/* Auth Modal */}
+      {showAuth && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAuth(false)}>
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-brand-ink/40 hover:text-brand-ink text-2xl leading-none">&times;</button>
+            <AuthForm onAuthSuccess={() => setShowAuth(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── ROOT ─────────────────────────────────────────────────────────────────────
+// ─── ROOT ───────────────────────────────────────────────────
 
 export default function App() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [plan, setPlan] = useState<any>(null);
   const [lastInputs, setLastInputs] = useState<TravelInputs | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-save trip when plan is generated and user is logged in
+  useEffect(() => {
+    if (plan && lastInputs && user) {
+      const tripName = plan.destinationOverview?.title || lastInputs.destination || 'Viaggio';
+      saveTrip({
+        trip_name: tripName,
+        destination: lastInputs.destination,
+        inputs: lastInputs,
+        plan,
+        is_favorite: false,
+      }, user.id).catch((err) => console.error('Auto-save trip failed:', err));
+    }
+  }, [plan]);
 
   const handleSubmit = async (inputs: TravelInputs) => {
     setLoading(true);

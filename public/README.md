@@ -1,30 +1,113 @@
-# Vagabond AI - v0.1
+# VAGABOND_Dou — Travel Planner AI
 
-Vagabond AI è un assistente di viaggio intelligente che trasforma i desideri degli utenti in itinerari completi, visivi e pronti all'uso. Utilizzando modelli linguistici avanzati (Gemini 2.5 Flash), l'app ricerca attivamente voli, alloggi, ristoranti e attività stagionali, fornendo link reali e mappe interattive.
+Fork di [Vagabond AI](https://github.com/dOuReallyDo/Vagabond) con profilo viaggiatore, autenticazione e viaggi salvati.
 
-## 🚀 Visione
-L'obiettivo di Vagabond AI è eliminare lo stress della pianificazione, offrendo un'esperienza di "slow travel" autentica e personalizzata, con un occhio di riguardo al budget e alla stagionalità.
+## 🚀 Novità rispetto a Vagabond
 
-## ✨ Caratteristiche Principali
-- **Itinerari Dinamici**: Generazione di piani giornalieri dettagliati.
-*   **Mappe Interattive**: Integrazione con Google Maps per visualizzare il percorso.
-*   **Ricerca Real-Time**: Utilizzo di Google Search per trovare link a tour operator e hotel reali.
-*   **Visual Experience**: Immagini dinamiche e pertinenti per ogni tappa del viaggio.
-*   **Budget Intelligence**: Valutazione automatica della fattibilità economica del viaggio.
-*   **Seasonal Awareness**: Suggerimenti basati sul periodo specifico (es. avvistamento balene a Boa Vista).
+- **🧑 Profilo Viaggiatore**: Età, tipo di viaggio, interessi, stile, mobilità, conoscenza destinazione — tutto personalizzabile con quick presets
+- **🔐 Autenticazione**: Login/Signup con email + Google OAuth via Supabase
+- **💾 Viaggi Salvati**: Ogni piano viene salvato automaticamente. Ritorna e ritrova tutto
+- **🎭 Quick Presets**: "Digital Nomad", "Luna di Miele", "Backpacker", "Silver Traveler" — un click per compilare il profilo
+- **💡 Note Intelligenti**: Suggerimenti cliccabili per arricchire le note del viaggio
+- **🧠 Prompt Enrichment**: Il profilo viaggiatore viene iniettato nel prompt Claude per itinerari ultra-personalizzati
+- **📱 localStorage Fallback**: Funziona anche senza login (profilo e viaggi salvati localmente)
+
+## ✨ Caratteristiche Principali (ereditate)
+- **Itinerari Dinamici**: Generazione di piani giornalieri dettagliati
+- **Mappe Interattive**: Integrazione con Leaflet/OpenStreetMap
+- **Ricerca Real-Time**: Claude AI con web search per link reali
+- **Visual Experience**: Immagini dinamiche per ogni tappa
+- **Budget Intelligence**: Breakdown automatico dei costi
+- **Seasonal Awareness**: Suggerimenti basati sul periodo
 
 ## 🛠️ Tech Stack
-- **Frontend**: React 18 + TypeScript + Tailwind CSS
-- **Animazioni**: Framer Motion
-- **Icone**: Lucide React
-- **AI**: Google Gemini API (@google/genai)
-- **Maps**: Google Maps Embed API
+
+| Layer | Tecnologia |
+|-------|-----------|
+| **Frontend** | React 18 + TypeScript + Tailwind CSS v4 |
+| **Animazioni** | Framer Motion |
+| **Icone** | Lucide React |
+| **AI** | Anthropic Claude (Sonnet 4 + Haiku) con web search |
+| **Auth & DB** | Supabase (PostgreSQL + RLS + Auth) |
+| **Maps** | Leaflet + OpenStreetMap |
+| **Build** | Vite |
+| **Deploy** | Vercel |
 
 ## 📦 Struttura del Progetto
-- `/src/components`: Componenti UI riutilizzabili.
-- `/src/services`: Logica di integrazione con le API AI.
-- `/src/App.tsx`: Layout principale e gestione dello stato.
-- `/src/index.css`: Configurazioni Tailwind e stili globali.
 
----
-*Sviluppato con ❤️ per i viaggiatori moderni.*
+```
+src/
+├── App.tsx                    # Main app con 2-step form + auth
+├── main.tsx                   # Entry point (AuthProvider wrapper)
+├── shared/
+│   └── contract.ts            # Zod schemas (TravelInputs + TravelPlan)
+├── services/
+│   └── travelService.ts       # Claude AI API + prompt enrichment
+├── components/
+│   ├── AuthForm.tsx            # Login/Signup UI
+│   ├── ProfileForm.tsx         # Profilo viaggiatore (età, interessi, stile)
+│   ├── SavedTrips.tsx          # Lista viaggi salvati
+│   ├── TravelMap.tsx           # Leaflet map component
+│   └── NoteSuggestions.tsx      # Clickable note suggestions
+├── lib/
+│   ├── auth.tsx                # Auth context + hooks (Supabase)
+│   ├── storage.ts              # Profile + trips CRUD (Supabase + localStorage)
+│   └── supabase.ts             # Supabase client
+supabase/
+└── schema.sql                  # DB schema (profiles, saved_trips)
+```
+
+## 🔧 Setup
+
+### 1. Installazione
+
+```bash
+git clone https://github.com/dOuReallyDo/VAGABOND_Dou.git
+cd VAGABOND_Dou
+npm install
+```
+
+### 2. Variabili d'ambiente
+
+Crea un file `.env` nella root:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 3. Supabase Setup
+
+1. Crea un progetto su [supabase.com](https://supabase.com)
+2. Vai in **SQL Editor** ed esegui il contenuto di `supabase/schema.sql`
+3. Copia **Project URL** e **anon public key** in `.env`
+
+### 4. Avvia in locale
+
+```bash
+npm run dev
+```
+
+L'app sarà disponibile su `http://localhost:3000`
+
+## 🔐 Autenticazione
+
+- **Email + Password**: Registrazione e login standard
+- **Google OAuth**: Login rapido con account Google
+- **Guest Mode**: Funziona senza login — profilo e viaggi salvati in localStorage
+- **Migrazione**: Al primo login, i dati localStorage vengono migrati su Supabase
+
+## 🧑 Profilo Viaggiatore
+
+Il profilo include:
+- Fascia d'età (18-25, 26-35, 36-45, 46-55, 56-65, 65+)
+- Tipo di viaggio (Solo/a, Coppia romantica, Famiglia, Gruppo amici, Business)
+- Interessi (Cultura, Mare, Food & Wine, Natura, Sport, Shopping, Nightlife, Benessere, Foto, Avventura)
+- Stile di viaggio (Slow & relax, Equilibrato, Avventura intensa)
+- Mobilità (Nessuna limitazione, Ridotta, A carrozzina)
+- Conoscenza destinazione (Mai stato qui, Ci sono già stato, Esperto)
+
+## 📄 Licenza
+
+Fork di Vagabond AI — vedere il repo originale per la licenza.

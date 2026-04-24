@@ -101,9 +101,47 @@ export const generateTravelPlan = async (
 
     onProgress?.("Preparazione prompt...", 30);
 
+    // Build traveler profile section
+    const profileSection = inputs.travelerProfile ? `
+PROFILO VIAGGIATORE:
+- Fascia d'età: ${inputs.travelerProfile.ageRange || 'Non specificata'}
+- Tipo di viaggio: ${inputs.travelerProfile.travelerType || 'Non specificato'}
+- Interessi: ${inputs.travelerProfile.interests?.length ? inputs.travelerProfile.interests.join(', ') : 'Non specificati'}
+- Stile di viaggio: ${inputs.travelerProfile.pace || 'Equilibrato'}
+- Mobilità: ${inputs.travelerProfile.mobility || 'Nessuna limitazione'}
+- Conoscenza destinazione: ${inputs.travelerProfile.familiarity || 'Prima volta'}
+
+REGOLE BASATE SUL PROFILO:
+${inputs.travelerProfile.pace === 'Slow & relax' ? '- Rallenta il ritmo: MAX 2-3 attività al giorno. Includi pranzi lunghi, pause caffè, tempo libero per esplorare senza fretta.\n- Suggerisci esperienze rilassanti: terme, passeggiate, mercati locali, aperitivi al tramonto.\n- Evita itinerari fitti: meglio approfondire meno cose con più tempo per ognuna.' : ''}
+${inputs.travelerProfile.pace === 'Avventura intensa' ? '- Ritmo intenso: 4-5 attività al giorno. Alzata all\'alba, giorno pieno, serale con vita notturna.\n- Includi esperienze adrenaliniche: escursioni, sport, tour guidati mattina presto.\n- Suggerisci sia attrazioni imperdibili che esperienze fuori dai sentieri battuti.' : ''}
+${inputs.travelerProfile.travelerType?.includes('Coppia romantica') ? '- Questo è un viaggio ROMANTICO. Suggerisci: ristoranti intimi con candele, esperienze per due (cena sul tetto, gita in barca al tramonto), alloggi con vista o jacuzzi.\n- Evita: ostelli-party, attrazioni per famiglie rumorose, alberghi troppo economici.\n- Nel "localTips" aggiungi consigli specifici per coppie.' : ''}
+${inputs.travelerProfile.travelerType?.includes('bimbi piccoli') ? '- Questo viaggio include BAMBINI PICCOLI. Regole fondamentali:\n  a) Orari flessibili per pisolini (2-3h di pausa dopo pranzo).\n  b) Attrazioni kid-friendly: parchi giochi, spiagge con acqua bassa, zoo, musei interattivi.\n  c) Ristoranti family-friendly con menù bambini e seggioloni.\n  d) Hotel con piscina, giardino, camere spaziose (family room).\n  e) Includi sempre un\'attività indoor per giorni di pioggia.\n  f) Nel budget, considera che i bambini piccoli spesso non pagano o pagano meno.\n- Nel "localTips" aggiungi consigli per famiglie con bambini.' : ''}
+${inputs.travelerProfile.travelerType?.includes('ragazzi') ? '- Questo viaggio include RAGAZZI (6-17 anni). Suggerisci: avventura, sport acquatici, attrazioni interattive, food tour.\n- Orari più flessibili ma attivi. Includi attività che tengono occupati i ragazzi.\n- Nel budget, i ragazzi spesso hanno tariffe ridotte.' : ''}
+${inputs.travelerProfile.travelerType === 'Solo/a' ? '- Il viaggiatore è SOLO. Suggerisci: ostelli sociali (per conoscere gente), free walking tour, attività di gruppo, ristoranti con bancone.\n- Includi esperienze per singoli: tour privati, cooking class, spettacoli.\n- Consiglia alloggi dove è facile socializzare.' : ''}
+${inputs.travelerProfile.travelerType === 'Gruppo di amici' ? '- Questo è un viaggio di GRUPPO. Suggerisci: alloggi spaziosi (ville, appartamenti), attività di gruppo, ristoranti per gruppi.\n- Includi serate divertenti: birrerie, locali live, escursioni in gruppo.\n- Il budget per persona può essere inferiore (gruppi = sconti su alloggi e attività).' : ''}
+${inputs.travelerProfile.travelerType === 'Viaggio di lavoro' ? '- Questo è un viaggio di BUSINESS. Suggerisci: hotel centrali con WiFi veloce, coworking spaces, ristoranti per meeting.\n- Includi una o due attività leisure compatibili con orari di lavoro.\n- Consiglia bar/caffè con buon WiFi per smart working.' : ''}
+${inputs.travelerProfile.interests?.length ? `
+REGOLE PER GLI INTERESSI SELEZIONATI:
+${inputs.travelerProfile.interests.includes('Cultura') ? '- Cultura: Includi almeno 1 museo/sito storico per giorno. Suggerisci musei meno conosciuti ma imperdibili.' : ''}
+${inputs.travelerProfile.interests.includes('Mare') ? '- Mare: Includi attività costiere ogni giorno possibile. Spiagge attrezzate per famiglie o incontaminate per coppie.' : ''}
+${inputs.travelerProfile.interests.includes('Food & Wine') ? '- Food & Wine: Includi almeno 1 esperienza culinaria al giorno (food tour, mercato locale, cooking class, ristorante tipico). Suggerisci piatti locali tipici.' : ''}
+${inputs.travelerProfile.interests.includes('Natura') ? '- Natura: Includi escursioni, parchi naturali, sentieri. Suggerisci orari migliori per evitare caldo/calore.' : ''}
+${inputs.travelerProfile.interests.includes('Sport') ? '- Sport: Includi attività sportive (surf, trekking, ciclismo, diving). Verifica stagionalità.' : ''}
+${inputs.travelerProfile.interests.includes('Shopping') ? '- Shopping: Includi mercati locali, outlet, mercatini dell\'usato, negozi artigianali. Suggerisci i migliori per souvenir.' : ''}
+${inputs.travelerProfile.interests.includes('Nightlife') ? '- Nightlife: Includi bar, locali live, discoteche, rooftop bar. Suggerisci serate divertenti e zone della vita notturna.' : ''}
+${inputs.travelerProfile.interests.includes('Benessere') ? '- Benessere: Includi termi, spa, yoga, massaggi. Suggerisci hotel con wellness center.' : ''}
+${inputs.travelerProfile.interests.includes('Foto') ? '- Fotografia: Includi viewpoints, golden hour spots, luoghi instagrammabili. Suggerisci orari migliori per foto.' : ''}
+${inputs.travelerProfile.interests.includes('Intrattenimento') ? '- Intrattenimento: Includi spettacoli, concerti, teatro, cinema locale. Suggerisci eventi stagionali.' : ''}
+${inputs.travelerProfile.interests.includes('Avventura') ? '- Avventura: Includi sport estremi, escursioni fuoripista, esperienze uniche (parapendio, diving, safari).' : ''}
+${inputs.travelerProfile.interests.includes('Storia') ? '- Storia: Includi siti storici, monumenti, musei archeologici, tour guidati storici. Contestualizza con aneddoti.' : ''}
+` : ''}
+${inputs.travelerProfile.mobility?.includes('Ridotta') || inputs.travelerProfile.mobility?.includes('carrozzina') ? '- MOBILITÀ RIDOTTA/ASSENTE: Suggerisci SOLO attrazioni accessibili (ascensore, rampe, no scale). Evita luoghi con barriere architettoniche.\n- Consiglia hotel con ascensore e camere al piano terra.\n- Nel "localTips" aggiungi info specifiche su accessibilità.' : ''}
+${inputs.travelerProfile.familiarity?.includes('già stato') || inputs.travelerProfile.familiarity?.includes('Esperto') ? '- Il viaggiatore CONOSCE GIÀ la destinazione. Evita le attrazioni più ovvie e turistiche.\n- Suggerisci esperienze fuori dai sentieri battuti, quartieri locali, ristoranti nascosti.\n- Nel "localTips" includi consigli per chi vuole vedere cose nuove.' : ''}
+` : '';
+
     let prompt = `
 Sei un esperto agente di viaggi con profonda conoscenza locale. Il tuo obiettivo è pianificare un viaggio REALE, FATTIBILE e CONCRETO.
-
+${profileSection}
 REGOLE CRITICHE PER VOLI E LOGISTICA:
 1. VERIFICA VOLI:
    a) Usa la ricerca web per confermare QUALI COMPAGNIE AEREE operano realmente ogni tratta (es. "chi vola Milano Lisbona", "voli Lisbona Boa Vista compagnie"). Cerca usando i codici IATA: MXP/LIN per Milano, LIS per Lisbona, BVC per Boa Vista, ecc.

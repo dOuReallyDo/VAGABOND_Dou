@@ -22,6 +22,14 @@ export const TravelInputsSchema = z.object({
   notes: z.string().optional(),
   modificationRequest: z.string().optional(),
   previousPlan: z.any().optional(),
+  travelerProfile: z.object({
+    ageRange: z.string().optional(),
+    travelerType: z.string().optional(),
+    interests: z.array(z.string()).optional(),
+    pace: z.string().optional(),
+    mobility: z.string().optional(),
+    familiarity: z.string().optional(),
+  }).optional(),
 });
 
 export type TravelInputs = z.infer<typeof TravelInputsSchema>;

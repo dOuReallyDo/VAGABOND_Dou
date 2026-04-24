@@ -1,6 +1,7 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import {AuthProvider} from './lib/auth';
 import './index.css';
 
 // Standalone mount logic
@@ -9,7 +10,9 @@ const rootElement = document.getElementById('vagabond-widget-root') || document.
 if (rootElement) {
   createRoot(rootElement).render(
     <StrictMode>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </StrictMode>,
   );
 }
@@ -20,7 +23,9 @@ export function mountVagabondWidget(elementId: string) {
   if (el) {
     createRoot(el).render(
       <StrictMode>
-        <App />
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </StrictMode>,
     );
   }
