@@ -544,7 +544,7 @@ function AccommodationReviewer({ stops, inputs, onAdd }: { stops: any[]; inputs:
 
 // ─── RESULTS VIEW ─────────────────────────────────────────────────────────────
 
-function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan, onShowAuth }: { plan: any; inputs: any; onReset: () => void; onModify: (request: string) => void; onUpdatePlan: (plan: any) => void; onShowAuth: () => void }) {
+function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePlan, onShowAuth, planJustSaved, onPlanJustSavedAck }: { plan: any; inputs: any; onReset: () => void; onShowTrips: () => void; onModify: (request: string) => void; onUpdatePlan: (plan: any) => void; onShowAuth: () => void; planJustSaved?: boolean; onPlanJustSavedAck?: () => void }) {
   const { user, profile, signOut } = useAuth();
   const [modifyText, setModifyText] = useState("");
   const [selectedAccommodations, setSelectedAccommodations] = useState<Record<number, any>>({});
@@ -573,6 +573,15 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan, onShowAuth
     return () => document.removeEventListener('click', handler);
   }, [userMenuOpen]);
 
+  // Mostra feedback "Salvato!" quando App segnala che il salvataggio è avvenuto (auto-save o post-login)
+  useEffect(() => {
+    if (planJustSaved) {
+      setSavedFeedback('saved');
+      setTimeout(() => setSavedFeedback('idle'), 3000);
+      onPlanJustSavedAck?.();
+    }
+  }, [planJustSaved]);
+
   const handleSaveToTrips = async () => {
     if (!user) {
       // Persisti piano + inputs prima del redirect OAuth (sopravvive al reload)
@@ -582,6 +591,8 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan, onShowAuth
       onShowAuth();
       return;
     }
+    // Se già salvato (auto-save), mostra solo il feedback senza risalvare
+    if (savedFeedback === 'saved') return;
     setSavedFeedback('saving');
     try {
       const tripName = plan.destinationOverview?.title || inputs?.destination || 'Viaggio';
@@ -945,7 +956,7 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan, onShowAuth
                       <p className="text-xs text-brand-ink/40 truncate">{user.email}</p>
                     </div>
                     <button
-                      onClick={() => { setUserMenuOpen(false); onReset(); }}
+                      onClick={() => { setUserMenuOpen(false); onShowTrips(); }}
                       className="w-full text-left px-4 py-2.5 text-sm text-brand-ink/70 hover:bg-brand-ink/5 hover:text-brand-ink transition-colors flex items-center gap-2"
                     >
                       <MapPin className="w-4 h-4" /> I miei viaggi
@@ -2176,12 +2187,20 @@ function ResultsView({ plan, inputs, onReset, onModify, onUpdatePlan, onShowAuth
 
 // ─── FORM VIEW ────────────────────────────────────────────────────────────────
 
-function FormView({ onSubmit, loading }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean }) {
+function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean; initialShowTrips?: boolean; onShowTripsDone?: () => void }) {
   const { user, profile, signOut, updateProfile: updateAuthProfile } = useAuth();
   const [bgSeed] = useState(() => Math.floor(Math.random() * 1000));
   const [formStep, setFormStep] = useState<'profile' | 'travel'>('travel');
   const [view, setView] = useState<'form' | 'trips'>('form');
   const [showAuth, setShowAuth] = useState(false);
+
+  // Se richiesto dal genitore (es. dopo "I miei viaggi" dall'itinerario), apri direttamente i viaggi
+  useEffect(() => {
+    if (initialShowTrips) {
+      setView('trips');
+      onShowTripsDone?.();
+    }
+  }, [initialShowTrips]);
   const [travelerProfile, setTravelerProfile] = useState<TravelerProfileForm>({
     ageRange: '',
     travelerType: '',
@@ -2988,6 +3007,10 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  // Segnale per comunicare a ResultsView che il piano è stato salvato (auto-save o post-login)
+  const [planJustSaved, setPlanJustSaved] = useState(false);
+  // Quando l'utente dalla ResultsView vuole vedere i suoi viaggi
+  const [showSavedTripsFromResults, setShowSavedTripsFromResults] = useState(false);
 
   // Auto-save trip when plan is generated and user is logged in, prompt login if not
   useEffect(() => {
@@ -3000,7 +3023,9 @@ export default function App() {
           inputs: lastInputs,
           plan,
           is_favorite: false,
-        }, user.id).catch((err) => console.error('Auto-save trip failed:', err));
+        }, user.id)
+          .then(() => setPlanJustSaved(true))
+          .catch((err) => console.error('Auto-save trip failed:', err));
       } else {
         // User not logged in — prompt them to log in to save their trip
         setShowLoginPrompt(true);
@@ -3022,6 +3047,7 @@ export default function App() {
           // Login email/password: il piano è ancora in stato React — salvalo direttamente
           const tripName = plan.destinationOverview?.title || lastInputs.destination || 'Viaggio';
           saveTrip({ trip_name: tripName, destination: lastInputs.destination, inputs: lastInputs, plan, is_favorite: false }, user.id)
+            .then(() => setPlanJustSaved(true))
             .catch(err => console.error('Post-login save failed:', err));
         } else if (pendingPlan) {
           // OAuth redirect: pagina ricaricata, ripristina il piano (l'effect [plan] lo salverà)
@@ -3043,6 +3069,7 @@ export default function App() {
         is_favorite: false,
       }, user.id).then(() => {
         setShowLoginPrompt(false);
+        setPlanJustSaved(true);
       }).catch((err) => console.error('Auto-save trip failed:', err));
     }
   }, [user]);
@@ -3110,8 +3137,8 @@ export default function App() {
           </div>
         </div>
       )}
-      {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} onShowAuth={() => setShowAuth(true)} />}
-      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} />}
+      {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onShowTrips={() => { setPlan(null); setShowSavedTripsFromResults(true); }} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} onShowAuth={() => setShowAuth(true)} planJustSaved={planJustSaved} onPlanJustSavedAck={() => setPlanJustSaved(false)} />}
+      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} />}
 
       {/* Login prompt modal for saving trips when not authenticated */}
       <AnimatePresence>
