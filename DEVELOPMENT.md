@@ -54,13 +54,21 @@ Utente → Profile Form → Travel Form → Claude API (con profilo nel prompt)
                                     ↓
                     Validazione Zod → UI Rendering
                                     ↓
-                    Auto-salvataggio (Supabase o localStorage)
+                    Salvataggio esplicito (Supabase o localStorage fallback)
 ```
+
+### Auth Initialization Pattern
+`AuthProvider` usa **solo** `onAuthStateChange` (non `getSession()`) come fonte di verità:
+- `INITIAL_SESSION` → imposta user/profile, poi setta `loading = false`
+- `SIGNED_IN` / `TOKEN_REFRESHED` → aggiorna session e profilo
+- `SIGNED_OUT` → resetta tutto a null
+
+`FormView` si monta solo quando `authLoading = false`, evitando caricamenti prematuri con `user = null`.
 
 ### Componenti Chiave
 | Componente | Responsabilità |
 |-----------|---------------|
-| `AuthProvider` | Sessione auth, profilo utente |
+| `AuthProvider` | Sessione auth, profilo utente — inizializzazione via `onAuthStateChange` (INITIAL_SESSION) |
 | `ProfileForm` | Step 1 del form — profilo viaggiatore |
 | `TravelForm` | Step 2 del form — dettagli viaggio |
 | `SavedTrips` | Lista e gestione viaggi salvati |

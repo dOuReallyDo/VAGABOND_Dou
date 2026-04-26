@@ -70,27 +70,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Listen for auth changes
+  // Listen for auth changes — onAuthStateChange fires INITIAL_SESSION on startup,
+  // which is the only reliable signal when the access token may need refreshing.
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-      setLoading(false);
-    });
-
-    // Listen for changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
           await fetchProfile(session.user.id);
         } else {
           setProfile(null);
+        }
+        if (event === 'INITIAL_SESSION') {
+          setLoading(false);
         }
       }
     );
@@ -123,14 +116,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
     setProfile(null);
-    // Clear localStorage auth data on logout
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('sb-') || key.includes('supabase')) {
-        localStorage.removeItem(key);
-      }
-    });
+    await supabase.auth.signOut();
   };
 
   const updateProfile = async (updates: Partial<TravelerProfile>) => {

@@ -102,12 +102,14 @@ L'app sarà disponibile su `http://localhost:3000`
 
 Dal menu in alto a destra (avatar + email):
 - **🎭 Il mio profilo viaggiatore** → Modal con ProfileForm (solo "Salva" + "Annulla"), salva su Supabase `profiles`
-- **📍 I miei viaggi** → Vista saved trips da Supabase
+- **📍 I miei viaggi** → Vista saved trips da Supabase (ricaricata ad ogni apertura)
 - **🔑 Cambia password** → Modal con nuova password + conferma, usa `supabase.auth.updateUser()`
-- **🚪 Logout** → `signOut()` + clear localStorage session + reset UI (view→form, trips→[])
+- **🚪 Logout** → `signOut()` + reset immediato dello stato React + `supabase.auth.signOut()`
 
-### Bug Noti
-- **Google OAuth**: Non configurato in Supabase Dashboard — serve OAuth client ID, secret e redirect URL
+### Persistenza Sessione
+- La sessione viene ripristinata automaticamente alla riapertura dell'app tramite `onAuthStateChange(INITIAL_SESSION)`
+- Il token viene refreshato automaticamente da Supabase se scaduto
+- `FormView` si monta solo dopo che l'auth è risolta, evitando caricamenti con `user = null`
 
 ## 🧑 Profilo Viaggiatore
 

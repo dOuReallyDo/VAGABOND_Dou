@@ -2237,13 +2237,16 @@ function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoad
     }
   }, [profile]);
 
-  // Load saved trips on mount & when user changes
+  // Load saved trips on mount, when user changes, or when trips panel opens
   useEffect(() => {
-    (async () => {
-      const trips = await loadTrips(user?.id);
-      setSavedTrips(trips);
-    })();
+    loadTrips(user?.id).then(setSavedTrips);
   }, [user]);
+
+  useEffect(() => {
+    if (view === 'trips') {
+      loadTrips(user?.id).then(setSavedTrips);
+    }
+  }, [view]);
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -2998,7 +3001,7 @@ function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoad
 // ─── ROOT ───────────────────────────────────────────────────
 
 export default function App() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -3126,7 +3129,7 @@ export default function App() {
         </div>
       )}
       {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onShowTrips={() => { setPlan(null); setShowSavedTripsFromResults(true); }} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} onShowAuth={() => setShowAuth(true)} planJustSaved={planJustSaved} onPlanJustSavedAck={() => setPlanJustSaved(false)} />}
-      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} onLoadTrip={(trip) => { setLastInputs(trip.inputs); setPlan(trip.plan); }} />}
+      {!loading && !error && !plan && !authLoading && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} onLoadTrip={(trip) => { setLastInputs(trip.inputs); setPlan(trip.plan); }} />}
 
       {/* Login prompt modal for saving trips when not authenticated */}
       <AnimatePresence>
