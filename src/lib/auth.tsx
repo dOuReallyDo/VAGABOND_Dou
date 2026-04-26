@@ -24,19 +24,6 @@ export const DEFAULT_PROFILE: TravelerProfile = {
   familiarity: "Mai stato qui",
 };
 
-// Removes all Supabase auth keys from localStorage directly.
-// Used in signOut so it's instant and doesn't depend on the Supabase network call.
-function clearSupabaseAuthStorage() {
-  try {
-    const keys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith("sb-") && k.includes("auth-token")) keys.push(k);
-    }
-    keys.forEach((k) => localStorage.removeItem(k));
-  } catch (_) {}
-}
-
 // =============================================
 // Auth Context
 // =============================================
@@ -122,18 +109,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    // 1. Update React state immediately — UI shows guest at once
     setUser(null);
     setSession(null);
     setProfile(null);
-
-    // 2. Wipe the session from localStorage directly — fast, no network needed.
-    //    supabase.auth.signOut() awaits initializePromise and can hang if a token
-    //    refresh is in progress. Clearing storage directly guarantees the session
-    //    is gone so the next page load starts clean.
-    clearSupabaseAuthStorage();
-
-    // 3. Best-effort server-side invalidation (non-blocking, fire-and-forget).
     supabase.auth.signOut().catch(() => {});
   };
 
