@@ -70,22 +70,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Listen for auth changes — onAuthStateChange fires INITIAL_SESSION on startup.
-  // setLoading(false) is called immediately on INITIAL_SESSION (before fetchProfile)
-  // so the app never stays on a blank page if the profile fetch is slow.
+  // Auth initialization.
+  //
+  // onAuthStateChange is the source of truth for reactive updates.
+  // BUT: if Supabase's internal initializePromise rejects (e.g. navigator.locks
+  // timeout on browser close/reopen), INITIAL_SESSION never fires and the app
+  // stays on a blank page forever.
+  //
+  // getSession() is used as a guaranteed fallback: it reads directly from
+  // localStorage without waiting for the lock, so it always resolves quickly.
+  // If INITIAL_SESSION already fired first, the fallback is a no-op.
   useEffect(() => {
+    let initialSessionHandled = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (!session?.user) setProfile(null);
-
-        // Unblock rendering before the async profile fetch
-        if (event === 'INITIAL_SESSION') setLoading(false);
-
+        if (event === 'INITIAL_SESSION') {
+          initialSessionHandled = true;
+          setLoading(false);
+        }
         if (session?.user) await fetchProfile(session.user.id);
       }
     );
+
+    // Fallback: if INITIAL_SESSION hasn't fired within the same microtask queue,
+    // getSession() guarantees setLoading(false) is called.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (initialSessionHandled) return;
+      initialSessionHandled = true;
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (!session?.user) setProfile(null);
+      else fetchProfile(session.user.id);
+      setLoading(false);
+    });
 
     return () => subscription.unsubscribe();
   }, []);
