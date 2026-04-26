@@ -110,33 +110,36 @@ export async function loadTrips(userId?: string): Promise<SavedTrip[]> {
   return [];
 }
 
-/** Save a trip */
+/** Save a trip — throws if userId is provided but Supabase save fails */
 export async function saveTrip(
   trip: Omit<SavedTrip, "id" | "created_at" | "updated_at">,
   userId?: string
 ): Promise<SavedTrip | null> {
   if (userId) {
-    try {
-      const { data, error } = await supabase
-        .from("saved_trips")
-        .insert({
-          user_id: userId,
-          trip_name: trip.trip_name,
-          destination: trip.destination,
-          inputs: trip.inputs,
-          plan: trip.plan,
-          is_favorite: trip.is_favorite,
-        })
-        .select()
-        .single();
+    const TIMEOUT_MS = 10_000;
+    const insertPromise = supabase
+      .from("saved_trips")
+      .insert({
+        user_id: userId,
+        trip_name: trip.trip_name,
+        destination: trip.destination,
+        inputs: trip.inputs,
+        plan: trip.plan,
+        is_favorite: trip.is_favorite,
+      })
+      .select()
+      .single();
 
-      if (!error && data) return data as SavedTrip;
-    } catch (err) {
-      console.error("[Storage] Error saving trip to Supabase:", err);
-    }
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout: il server non risponde")), TIMEOUT_MS)
+    );
+
+    const { data, error } = await Promise.race([insertPromise, timeoutPromise]);
+    if (error) throw new Error(error.message);
+    return data as SavedTrip;
   }
 
-  // Fallback: localStorage
+  // Guest fallback: localStorage only when not authenticated
   const trips = await loadTrips();
   const newTrip: SavedTrip = {
     ...trip,

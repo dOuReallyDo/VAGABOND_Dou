@@ -555,7 +555,8 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
   const [restaurantsExpanded, setRestaurantsExpanded] = useState(false);
   const [openBookingMenu, setOpenBookingMenu] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [savedFeedback, setSavedFeedback] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [savedFeedback, setSavedFeedback] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Chiudi il menu di prenotazione quando si clicca fuori
   useEffect(() => {
@@ -592,8 +593,9 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
       return;
     }
     // Evita doppio salvataggio se già in corso o già completato
-    if (savedFeedback !== 'idle') return;
+    if (savedFeedback === 'saving' || savedFeedback === 'saved') return;
     setSavedFeedback('saving');
+    setSaveError(null);
     try {
       const tripName = plan.destinationOverview?.title || inputs?.destination || 'Viaggio';
       await saveTrip({
@@ -607,7 +609,10 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
       // Mantiene "Salvato!" permanentemente — non torna a idle così non si può ri-cliccare
     } catch (err) {
       console.error('Save trip error:', err);
-      setSavedFeedback('idle');
+      const msg = err instanceof Error ? err.message : 'Errore durante il salvataggio';
+      setSaveError(msg);
+      setSavedFeedback('error');
+      setTimeout(() => { setSavedFeedback('idle'); setSaveError(null); }, 4000);
     }
   };
 
@@ -910,23 +915,32 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
           {/* Destra */}
           <div className="flex items-center gap-2">
             {/* Salva nei miei viaggi */}
-            <button
-              onClick={handleSaveToTrips}
-              disabled={savedFeedback === 'saving'}
-              className={`flex items-center gap-2 text-sm px-4 py-1.5 rounded-full font-medium transition-all shadow-sm ${
-                savedFeedback === 'saved'
-                  ? 'bg-green-500 text-white'
-                  : 'bg-brand-accent text-white hover:bg-brand-accent/90'
-              }`}
-            >
-              {savedFeedback === 'saved' ? (
-                <><CheckCircle2 className="w-4 h-4" /> Salvato!</>
-              ) : savedFeedback === 'saving' ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Salvataggio...</>
-              ) : (
-                <><Download className="w-4 h-4" /> Salva Itinerario</>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={handleSaveToTrips}
+                disabled={savedFeedback === 'saving' || savedFeedback === 'saved'}
+                className={`flex items-center gap-2 text-sm px-4 py-1.5 rounded-full font-medium transition-all shadow-sm ${
+                  savedFeedback === 'saved'
+                    ? 'bg-green-500 text-white'
+                    : savedFeedback === 'error'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-brand-accent text-white hover:bg-brand-accent/90'
+                }`}
+              >
+                {savedFeedback === 'saved' ? (
+                  <><CheckCircle2 className="w-4 h-4" /> Salvato!</>
+                ) : savedFeedback === 'saving' ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Salvataggio...</>
+                ) : savedFeedback === 'error' ? (
+                  <><AlertTriangle className="w-4 h-4" /> Errore — Riprova</>
+                ) : (
+                  <><Download className="w-4 h-4" /> Salva Itinerario</>
+                )}
+              </button>
+              {savedFeedback === 'error' && saveError && (
+                <span className="text-xs text-red-500 max-w-[200px] text-right">{saveError}</span>
               )}
-            </button>
+            </div>
 
             {/* Scarica HTML */}
             <button
