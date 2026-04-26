@@ -72,16 +72,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Auth initialization.
   //
-  // onAuthStateChange is the source of truth for reactive updates.
-  // BUT: if Supabase's internal initializePromise rejects (e.g. navigator.locks
-  // timeout on browser close/reopen), INITIAL_SESSION never fires and the app
-  // stays on a blank page forever.
+  // All Supabase APIs (getSession, from().select(), onAuthStateChange) internally
+  // await initializePromise, which holds a navigator.locks exclusive lock while
+  // doing the token refresh network request. On a slow network (or if the lock
+  // is orphaned), this can block for many seconds causing a permanent blank page.
   //
-  // getSession() is used as a guaranteed fallback: it reads directly from
-  // localStorage without waiting for the lock, so it always resolves quickly.
-  // If INITIAL_SESSION already fired first, the fallback is a no-op.
+  // Fix: onAuthStateChange is the source of truth. A hard 5-second timeout
+  // guarantees setLoading(false) is always called, so the app never stays blank.
+  // If INITIAL_SESSION fires before the timeout (normal case, < 1s), the timeout
+  // is cleared. If the timeout fires first, the app renders as guest; when
+  // Supabase eventually resolves it updates the state via onAuthStateChange.
   useEffect(() => {
-    let initialSessionHandled = false;
+    let resolved = false;
+
+    const hardTimeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        setLoading(false);
+      }
+    }, 5000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -89,26 +98,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         if (!session?.user) setProfile(null);
         if (event === 'INITIAL_SESSION') {
-          initialSessionHandled = true;
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(hardTimeout);
+          }
           setLoading(false);
         }
         if (session?.user) await fetchProfile(session.user.id);
       }
     );
 
-    // Fallback: if INITIAL_SESSION hasn't fired within the same microtask queue,
-    // getSession() guarantees setLoading(false) is called.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (initialSessionHandled) return;
-      initialSessionHandled = true;
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (!session?.user) setProfile(null);
-      else fetchProfile(session.user.id);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(hardTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

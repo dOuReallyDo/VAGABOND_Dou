@@ -3130,6 +3130,11 @@ export default function App() {
   return (
     <>
       {loading && <LoadingScreen step={loadingStep} progress={loadingProgress} />}
+      {authLoading && !loading && (
+        <div className="min-h-screen bg-brand-paper flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-brand-accent" />
+        </div>
+      )}
       {error && !loading && (
         <div className="min-h-screen bg-brand-paper flex items-center justify-center p-6">
           <div className="max-w-md text-center">
