@@ -24,6 +24,19 @@ export const DEFAULT_PROFILE: TravelerProfile = {
   familiarity: "Mai stato qui",
 };
 
+// Removes all Supabase auth keys from localStorage directly.
+// Used in signOut so it's instant and doesn't depend on the Supabase network call.
+function clearSupabaseAuthStorage() {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("sb-") && k.includes("auth-token")) keys.push(k);
+    }
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch (_) {}
+}
+
 // =============================================
 // Auth Context
 // =============================================
@@ -45,10 +58,9 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const loading = false; // always false — app starts as guest immediately, never blocks UI
   const [profile, setProfile] = useState<TravelerProfile | null>(null);
 
-  // Fetch profile from Supabase
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -56,62 +68,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select("age_range, traveler_type, interests, pace, mobility, familiarity, display_name")
         .eq("id", userId)
         .single();
-
-      if (error) {
-        console.warn("[Auth] Profile not found, using defaults:", error.message);
-        setProfile(null);
-        return;
-      }
-
-      setProfile(data as TravelerProfile);
-    } catch (err) {
-      console.error("[Auth] Error fetching profile:", err);
+      if (!error && data) setProfile(data as TravelerProfile);
+      else setProfile(null);
+    } catch {
       setProfile(null);
     }
   };
 
-  // Auth initialization.
+  // Auth initialization strategy:
   //
-  // All Supabase APIs (getSession, from().select(), onAuthStateChange) internally
-  // await initializePromise, which holds a navigator.locks exclusive lock while
-  // doing the token refresh network request. On a slow network (or if the lock
-  // is orphaned), this can block for many seconds causing a permanent blank page.
+  // Supabase's initializePromise blocks ALL its APIs (getSession, from().select,
+  // onAuthStateChange) while refreshing an expired token over the network.
+  // This caused blank pages and stuck login forms.
   //
-  // Fix: onAuthStateChange is the source of truth. A hard 5-second timeout
-  // guarantees setLoading(false) is always called, so the app never stays blank.
-  // If INITIAL_SESSION fires before the timeout (normal case, < 1s), the timeout
-  // is cleared. If the timeout fires first, the app renders as guest; when
-  // Supabase eventually resolves it updates the state via onAuthStateChange.
+  // Fix: loading starts as FALSE — the app is always usable immediately as guest.
+  // onAuthStateChange updates state asynchronously when Supabase is ready.
+  // No spinners, no blank pages, no hard timeouts needed.
   useEffect(() => {
-    let resolved = false;
-
-    const hardTimeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        setLoading(false);
-      }
-    }, 5000);
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        if (!session?.user) setProfile(null);
-        if (event === 'INITIAL_SESSION') {
-          if (!resolved) {
-            resolved = true;
-            clearTimeout(hardTimeout);
-          }
-          setLoading(false);
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        } else {
+          setProfile(null);
         }
-        if (session?.user) await fetchProfile(session.user.id);
       }
     );
-
-    return () => {
-      clearTimeout(hardTimeout);
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -131,18 +116,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/`,
-      },
+      options: { redirectTo: `${window.location.origin}/` },
     });
     if (error) throw error;
   };
 
   const signOut = async () => {
+    // 1. Update React state immediately — UI shows guest at once
     setUser(null);
     setSession(null);
     setProfile(null);
-    await supabase.auth.signOut();
+
+    // 2. Wipe the session from localStorage directly — fast, no network needed.
+    //    supabase.auth.signOut() awaits initializePromise and can hang if a token
+    //    refresh is in progress. Clearing storage directly guarantees the session
+    //    is gone so the next page load starts clean.
+    clearSupabaseAuthStorage();
+
+    // 3. Best-effort server-side invalidation (non-blocking, fire-and-forget).
+    supabase.auth.signOut().catch(() => {});
   };
 
   const updateProfile = async (updates: Partial<TravelerProfile>) => {
@@ -164,18 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        session,
-        loading,
-        profile,
-        signIn,
-        signUp,
-        signInWithGoogle,
-        signOut,
-        updateProfile,
-        refreshProfile,
-      }}
+      value={{ user, session, loading, profile, signIn, signUp, signInWithGoogle, signOut, updateProfile, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

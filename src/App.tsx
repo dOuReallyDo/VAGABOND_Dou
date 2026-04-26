@@ -3015,7 +3015,7 @@ function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoad
 // ─── ROOT ───────────────────────────────────────────────────
 
 export default function App() {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -3130,11 +3130,6 @@ export default function App() {
   return (
     <>
       {loading && <LoadingScreen step={loadingStep} progress={loadingProgress} />}
-      {authLoading && !loading && (
-        <div className="min-h-screen bg-brand-paper flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-accent" />
-        </div>
-      )}
       {error && !loading && (
         <div className="min-h-screen bg-brand-paper flex items-center justify-center p-6">
           <div className="max-w-md text-center">
@@ -3148,7 +3143,7 @@ export default function App() {
         </div>
       )}
       {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onShowTrips={() => { setPlan(null); setShowSavedTripsFromResults(true); }} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} onShowAuth={() => setShowAuth(true)} planJustSaved={planJustSaved} onPlanJustSavedAck={() => setPlanJustSaved(false)} />}
-      {!loading && !error && !plan && !authLoading && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} onLoadTrip={(trip) => { setLastInputs(trip.inputs); setPlan(trip.plan); }} />}
+      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} onLoadTrip={(trip) => { setLastInputs(trip.inputs); setPlan(trip.plan); }} />}
 
       {/* Login prompt modal for saving trips when not authenticated */}
       <AnimatePresence>
