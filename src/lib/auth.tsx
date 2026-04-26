@@ -70,21 +70,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Listen for auth changes — onAuthStateChange fires INITIAL_SESSION on startup,
-  // which is the only reliable signal when the access token may need refreshing.
+  // Listen for auth changes — onAuthStateChange fires INITIAL_SESSION on startup.
+  // setLoading(false) is called immediately on INITIAL_SESSION (before fetchProfile)
+  // so the app never stays on a blank page if the profile fetch is slow.
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        } else {
-          setProfile(null);
-        }
-        if (event === 'INITIAL_SESSION') {
-          setLoading(false);
-        }
+        if (!session?.user) setProfile(null);
+
+        // Unblock rendering before the async profile fetch
+        if (event === 'INITIAL_SESSION') setLoading(false);
+
+        if (session?.user) await fetchProfile(session.user.id);
       }
     );
 
