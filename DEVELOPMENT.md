@@ -57,13 +57,11 @@ Utente → Profile Form → Travel Form → Claude API (con profilo nel prompt)
                     Salvataggio esplicito (Supabase o localStorage fallback)
 ```
 
-### Auth Initialization Pattern
-`AuthProvider` usa **solo** `onAuthStateChange` (non `getSession()`) come fonte di verità:
-- `INITIAL_SESSION` → imposta user/profile, poi setta `loading = false`
-- `SIGNED_IN` / `TOKEN_REFRESHED` → aggiorna session e profilo
-- `SIGNED_OUT` → resetta tutto a null
-
-`FormView` si monta solo quando `authLoading = false`, evitando caricamenti prematuri con `user = null`.
+### Auth Pattern
+- `persistSession: false` nel client Supabase — nessuna sessione scritta o letta da localStorage
+- Ogni apertura/ricaricamento della pagina parte come guest; il login è richiesto esplicitamente
+- `AuthProvider` usa `onAuthStateChange` come unica fonte di verità; `loading` è costante `false` (mai bloccante)
+- La UI è sempre disponibile immediatamente come guest; lo stato loggato arriva in modo asincrono se l'utente fa login nella stessa tab
 
 ### Componenti Chiave
 | Componente | Responsabilità |

@@ -107,9 +107,9 @@ Dal menu in alto a destra (avatar + email):
 - **🚪 Logout** → `signOut()` + reset immediato dello stato React + `supabase.auth.signOut()`
 
 ### Persistenza Sessione
-- La sessione viene ripristinata automaticamente alla riapertura dell'app tramite `onAuthStateChange(INITIAL_SESSION)`
-- Il token viene refreshato automaticamente da Supabase se scaduto
-- `FormView` si monta solo dopo che l'auth è risolta, evitando caricamenti con `user = null`
+- **Nessuna persistenza**: `persistSession: false` nel client Supabase — ogni apertura/ricaricamento della pagina parte come guest
+- Il login è richiesto ad ogni sessione; non ci sono stati a metà o token scaduti da recuperare
+- La sessione è in-memory per la durata della tab; il token viene refreshato automaticamente da Supabase durante la sessione
 
 ## 🧑 Profilo Viaggiatore
 
