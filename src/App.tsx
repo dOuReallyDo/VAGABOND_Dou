@@ -19,6 +19,7 @@ import { generateTravelPlan, summarizeAccommodationReviews, getDestinationCountr
 import { TravelMap } from './components/TravelMap';
 import { useAuth } from './lib/auth';
 import { loadProfile, saveProfile, loadTrips, saveTrip, deleteTrip, toggleFavorite, migrateLocalTripsToSupabase, type SavedTrip } from './lib/storage';
+import { sanitizeTravelPlan } from './lib/urlSafety';
 import { AuthForm } from './components/AuthForm';
 import { supabase } from './lib/supabase';
 import { ProfileForm, type TravelerProfileForm } from './components/ProfileForm';
@@ -138,7 +139,8 @@ const LOADING_TIPS = [
 ];
 
 function LoadingScreen({ step, progress }: { step: string; progress: number }) {
-  const startTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(0);
+  if (startTimeRef.current === 0) startTimeRef.current = Date.now();
   const [elapsed, setElapsed] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(progress);
   const [tipIndex, setTipIndex] = useState(0);
@@ -3090,7 +3092,8 @@ export default function App() {
         setLoadingStep(step);
         setLoadingProgress(progress);
       });
-      setPlan(result);
+      const sanitizedResult = sanitizeTravelPlan(result, { startDate: inputs.startDate, endDate: inputs.endDate, people: inputs.people });
+      setPlan(sanitizedResult);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       console.error('Error generating plan:', err);
@@ -3117,7 +3120,8 @@ export default function App() {
         setLoadingStep(step);
         setLoadingProgress(progress);
       });
-      setPlan(result);
+      const sanitizedResult = sanitizeTravelPlan(result, { startDate: modifiedInputs.startDate, endDate: modifiedInputs.endDate, people: modifiedInputs.people });
+      setPlan(sanitizedResult);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       console.error('Error modifying plan:', err);

@@ -31,6 +31,102 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// URL Safety Check endpoint — Google Safe Browsing API
+app.post("/api/check-url", async (req, res) => {
+  const { urls } = req.body as { urls?: string[] };
+
+  if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    res.status(400).json({ error: "Missing or invalid 'urls' array" });
+    return;
+  }
+
+  const API_KEY = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+
+  if (!API_KEY) {
+    // No API key configured — return safe for all URLs (whitelist-only mode)
+    const results: Record<string, { safe: boolean; threats: string[] }> = {};
+    for (const url of urls) {
+      results[url] = { safe: true, threats: [] };
+    }
+    res.json({ results });
+    return;
+  }
+
+  try {
+    const results: Record<string, { safe: boolean; threats: string[] }> = {};
+
+    // Google Safe Browsing API allows up to 500 URLs per request
+    const batch = urls.slice(0, 500);
+
+    const response = await fetch(
+      `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client: {
+            clientId: "vagabond-dou",
+            clientVersion: "1.0.0",
+          },
+          threatInfo: {
+            threatTypes: [
+              "MALWARE",
+              "SOCIAL_ENGINEERING",
+              "UNWANTED_SOFTWARE",
+              "POTENTIALLY_HARMFUL_APPLICATION",
+            ],
+            platformTypes: ["ANY_PLATFORM"],
+            threatEntryTypes: ["URL"],
+            threatEntries: batch.map((url: string) => ({ url })),
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      // API error — fail closed (assume unsafe)
+      for (const url of urls) {
+        results[url] = { safe: false, threats: ["API_ERROR"] };
+      }
+      res.json({ results });
+      return;
+    }
+
+    const data = await response.json();
+    const matches = data.matches || [];
+
+    // Build a map of matched URLs to their threats
+    const threatMap = new Map<string, string[]>();
+    for (const match of matches) {
+      const matchedUrl = match.threat?.url || "";
+      const threatType = match.threatType || "UNKNOWN";
+      const existing = threatMap.get(matchedUrl) || [];
+      if (!existing.includes(threatType)) {
+        existing.push(threatType);
+      }
+      threatMap.set(matchedUrl, existing);
+    }
+
+    for (const url of urls) {
+      const threats = threatMap.get(url);
+      results[url] = {
+        safe: !threats,
+        threats: threats || [],
+      };
+    }
+
+    res.json({ results });
+  } catch (error) {
+    console.error("Safe Browsing API error:", error);
+    // Network/unknown error — fail closed
+    const results: Record<string, { safe: boolean; threats: string[] }> = {};
+    for (const url of urls) {
+      results[url] = { safe: false, threats: ["NETWORK_ERROR"] };
+    }
+    res.json({ results });
+  }
+});
+
 // 2. Setup serving logic
 async function setupApp() {
   const distPath = path.join(process.cwd(), "dist");

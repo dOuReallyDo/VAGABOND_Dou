@@ -55,7 +55,7 @@ export const TravelMap: React.FC<TravelMapProps> = ({ points, destination }) => 
       });
 
       // Verifica se il container ha già una mappa (Leaflet aggiunge una classe o proprietà)
-      // @ts-ignore
+      // @ts-expect-error -- Leaflet internal property not in types
       if (mapRef.current?._leaflet_id) return;
 
       try {

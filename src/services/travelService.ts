@@ -163,6 +163,14 @@ REGOLE CRITICHE PER VOLI E LOGISTICA:
    PREZZO REALE: Per ogni hotel scelto, usa la web search per cercare: "[nome hotel] [città] prezzo ${inputs.startDate} booking.com". Leggi il prezzo che appare nei risultati Google o su Booking.com e usa quello come "estimatedPricePerNight". In alternativa cerca "[nome hotel] [città] booking prezzo ${new Date(inputs.startDate).toLocaleString('it-IT', {month:'long', year:'numeric'})}". Se non trovi un prezzo reale, indica nella descrizione "prezzo da verificare su Booking". Se il prezzo trovato supera il budget, scegli un'alternativa della stessa categoria.
    IMPORTANTE: "estimatedPricePerNight" è il costo TOTALE per notte della camera per TUTTE le ${totalPeople} persone, NON per persona. Deve essere il prezzo REALE trovato su Booking.com per le date indicate, non una stima generica.
 
+🔗 SICUREZZA DEI LINK (OBBLIGATORIO):
+Per TUTTI i campi URL nel piano di viaggio (bookingUrl, sourceUrl, url, imageUrl, heroImageUrl), segui queste regole di sicurezza:
+- USA SOLO link a siti noti e affidabili. Domini ammessi: booking.com, tripadvisor.it/.com, airbnb.com, hotels.com, expedia.it, agoda.com, hostelworld.com, lonelyplanet.com, rome2rio.com, siti ufficiali di compagnie aeree (tap.pt, ryanair.com, easyjet.com, trenitalia.com, italotreno.it, ecc.), viaggiaresicuri.it, esteri.it, google.com/maps, uber.com, flixbus.it, trainline.eu, skyscanner.it, kayak.it.
+- Per gli hotel: il campo "bookingUrl" DEVE essere il link diretto su Booking.com (es. https://www.booking.com/hotel/it/nome-hotel.html) oppure il sito ufficiale dell'hotel SE è un dominio verificato e affidabile. Se non trovi il sito ufficiale, usa il link Booking.com.
+- Per le attrazioni e i ristoranti (sourceUrl): usa tripadvisor.it, booking.com/attractions, o il sito ufficiale dell'attrazione SE è un dominio noto e affidabile.
+- NON usare MAI: URL shortener (bit.ly, tinyurl, ecc.), link a siti sconosciuti con TLD sospetti (.tk, .ml, .xyz, .top, .buzz, .icu), link HTTP (solo HTTPS), link con IP address, link con parametri di redirect (redirect=, url=, dest=).
+- Se non riesci a trovare un link sicuro per una risorsa, lascia il campo URL vuoto (undefined/null) piuttosto che inserire un link dubbio. La sicurezza dell'utente viene PRIMA di avere un link.
+
 DETTAGLI VIAGGIO:
 - Partenza: ${inputs.departureCity}${inputs.departureCountry ? ` (${inputs.departureCountry})` : ''}
 - Destinazione: ${inputs.destination}${inputs.country ? ` (${inputs.country})` : ''}
