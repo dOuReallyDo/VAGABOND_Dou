@@ -2389,17 +2389,14 @@ function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoad
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/10 to-black/80" />
         <div className="absolute inset-0 bg-brand-ink/10" />
         
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10 mt-8 lg:mt-16">
-          <div className="inline-block bg-white rounded-2xl px-5 py-3 shadow-lg">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10 mt-8 lg:mt-16 flex flex-col items-center text-center">
+          <div className="inline-block bg-white rounded-2xl px-5 py-3 shadow-lg mb-4">
             <img
               src="/leowanderlogo.png"
               alt="Leo Wander"
               className="w-36 md:w-44 h-auto"
             />
           </div>
-        </motion.div>
-        
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="relative z-10 mt-auto mb-8 text-center">
           <p className="text-lg md:text-xl font-serif italic text-white/90 max-w-md drop-shadow-md">
             Il tuo concierge digitale per viaggi autentici e indimenticabili.
           </p>
