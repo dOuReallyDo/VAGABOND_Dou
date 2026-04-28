@@ -273,35 +273,59 @@ export async function saveTrip(
       console.log('[SaveTrip] After strip:', (newSize / 1024).toFixed(1), 'KB');
     }
 
-    // Try Supabase save — if it fails for any reason, save to localStorage as fallback
+    // Try Supabase save via REST API — bypasses Supabase JS client which hangs
+    // on initializePromise when token refresh stalls
     try {
-      // Fire-and-forget insert: no .select() — Supabase free tier with RLS
-      // can hang on .select().single(). Just confirm the insert was sent.
-      const insertPromise = supabase
-        .from("saved_trips")
-        .insert({
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      // Read the access token directly from localStorage — avoids the
+      // supabase.auth.getSession() call which hangs on initializePromise
+      let accessToken: string | null = null;
+      try {
+        // Supabase stores session in localStorage under a key like:
+        // sb-{project-ref}-auth-token
+        const projectRef = supabaseUrl.split('//')[1].split('.')[0];
+        const sessionKey = `sb-${projectRef}-auth-token`;
+        const raw = localStorage.getItem(sessionKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          accessToken = parsed?.access_token || parsed?.currentSession?.access_token || null;
+        }
+      } catch { /* ignore */ }
+
+      if (!accessToken) {
+        console.warn('[SaveTrip] No access token in localStorage — falling back to localStorage save');
+        return saveTripToLocal(trip);
+      }
+
+      console.log('[SaveTrip] Using REST API with direct token, user:', userId);
+
+      const response = await fetch(`${supabaseUrl}/rest/v1/saved_trips`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
           user_id: userId,
           trip_name: trip.trip_name,
           destination: trip.destination,
           inputs: trip.inputs,
           plan: planToSave,
           is_favorite: trip.is_favorite,
-        });
+        }),
+      });
 
-      const timeoutPromise = new Promise<'timeout'>(() =>
-        setTimeout(() => 'timeout' as const, 8_000)
-      );
-
-      console.log('[SaveTrip] Awaiting insert promise...');
-      const result = await Promise.race([insertPromise, new Promise<any>((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout (8s)")), 8_000)
-      )]);
-
-      if (result?.error) {
-        console.error('[SaveTrip] Supabase error:', JSON.stringify(result.error, null, 2));
-        throw new Error(result.error.message);
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error('[SaveTrip] REST error:', response.status, errBody);
+        throw new Error(`Supabase REST ${response.status}: ${errBody}`);
       }
-      console.log('[SaveTrip] Saved to Supabase successfully');
+
+      console.log('[SaveTrip] Saved to Supabase via REST successfully');
       return null;
     } catch (err) {
       console.error('[SaveTrip] Supabase save failed, falling back to localStorage:', err);
