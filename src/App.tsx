@@ -576,7 +576,7 @@ function AccommodationReviewer({ stops, inputs, onAdd }: { stops: any[]; inputs:
 
 // ─── RESULTS VIEW ─────────────────────────────────────────────────────────────
 
-function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePlan, onShowAuth, planJustSaved, onPlanJustSavedAck }: { plan: any; inputs: any; onReset: () => void; onShowTrips: () => void; onModify: (request: string) => void; onUpdatePlan: (plan: any) => void; onShowAuth: () => void; planJustSaved?: boolean; onPlanJustSavedAck?: () => void }) {
+function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePlan, onShowAuth, planJustSaved, onPlanJustSavedAck, onTripSaved }: { plan: any; inputs: any; onReset: () => void; onShowTrips: () => void; onModify: (request: string) => void; onUpdatePlan: (plan: any) => void; onShowAuth: () => void; planJustSaved?: boolean; onPlanJustSavedAck?: () => void; onTripSaved?: () => void }) {
   const { user, profile, signOut } = useAuth();
   const [modifyText, setModifyText] = useState("");
   const [selectedAccommodations, setSelectedAccommodations] = useState<Record<number, any>>({});
@@ -696,6 +696,8 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
       console.log('[SaveTrip] Payload size:', (payloadSize / 1024).toFixed(1), 'KB');
       await saveTrip(payload, user.id);
       setSavedFeedback('saved');
+      // Notify parent to reload saved trips list
+      onTripSaved?.();
       // Mantiene "Salvato!" permanentemente — non torna a idle così non si può ri-cliccare
     } catch (err) {
       console.error('Save trip error:', err);
@@ -2322,7 +2324,7 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
 
 // ─── FORM VIEW ────────────────────────────────────────────────────────────────
 
-function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoadTrip }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean; initialShowTrips?: boolean; onShowTripsDone?: () => void; onLoadTrip?: (trip: SavedTrip) => void }) {
+function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoadTrip, tripsVersion }: { onSubmit: (inputs: TravelInputs) => void; loading: boolean; initialShowTrips?: boolean; onShowTripsDone?: () => void; onLoadTrip?: (trip: SavedTrip) => void; tripsVersion?: number }) {
   const { user, profile, signOut, updateProfile: updateAuthProfile } = useAuth();
   const [bgSeed] = useState(() => Math.floor(Math.random() * 1000));
   const [formStep, setFormStep] = useState<'profile' | 'travel'>('travel');
@@ -2375,7 +2377,7 @@ function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoad
   // Load saved trips on mount, when user changes, or when trips panel opens
   useEffect(() => {
     loadTrips(user?.id).then(setSavedTrips);
-  }, [user]);
+  }, [user, tripsVersion]);
 
   useEffect(() => {
     if (view === 'trips') {
@@ -3149,6 +3151,8 @@ export default function App() {
   const [planJustSaved, setPlanJustSaved] = useState(false);
   // Quando l'utente dalla ResultsView vuole vedere i suoi viaggi
   const [showSavedTripsFromResults, setShowSavedTripsFromResults] = useState(false);
+  // Incremented each time a trip is saved — triggers reload in FormView
+  const [tripsVersion, setTripsVersion] = useState(0);
 
   // NON auto-salviamo alla generazione: il salvataggio è esplicito (pulsante "Salva Itinerario")
   // Se l'utente non è loggato mostriamo il prompt di login
@@ -3265,8 +3269,8 @@ export default function App() {
           </div>
         </div>
       )}
-      {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onShowTrips={() => { setPlan(null); setShowSavedTripsFromResults(true); }} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} onShowAuth={() => setShowAuth(true)} planJustSaved={planJustSaved} onPlanJustSavedAck={() => setPlanJustSaved(false)} />}
-      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} onLoadTrip={(trip) => { setLastInputs(trip.inputs); setPlan(trip.plan); }} />}
+      {!loading && !error && plan && <ResultsView plan={plan} inputs={lastInputs} onReset={() => setPlan(null)} onShowTrips={() => { setPlan(null); setShowSavedTripsFromResults(true); }} onModify={handleModify} onUpdatePlan={(newPlan) => setPlan(newPlan)} onShowAuth={() => setShowAuth(true)} planJustSaved={planJustSaved} onPlanJustSavedAck={() => setPlanJustSaved(false)} onTripSaved={() => { setTripsVersion(v => v + 1); }} />}
+      {!loading && !error && !plan && <FormView onSubmit={handleSubmit} loading={loading} initialShowTrips={showSavedTripsFromResults} onShowTripsDone={() => setShowSavedTripsFromResults(false)} onLoadTrip={(trip) => { setLastInputs(trip.inputs); setPlan(trip.plan); }} tripsVersion={tripsVersion} />}
 
       {/* Login prompt modal for saving trips when not authenticated */}
       <AnimatePresence>

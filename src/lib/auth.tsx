@@ -71,14 +71,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fix: loading starts as FALSE — the app is always usable immediately as guest.
   // onAuthStateChange updates state asynchronously when Supabase is ready.
   // No spinners, no blank pages, no hard timeouts needed.
+  //
+  // IMPORTANT: On TOKEN_REFRESHED events, the session might briefly be null
+  // during the refresh transition. We guard against this by only clearing
+  // user/session on explicit SIGNED_OUT events, not on transient null sessions.
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        console.log('[Auth] onAuthStateChange event:', event, 'has session:', !!session);
+
+        // On SIGNED_OUT, explicitly clear state
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+          return;
+        }
+
+        // On INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED — update session
+        // Only clear user if session is truly null (not just a transient gap)
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
           await fetchProfile(session.user.id);
-        } else {
+        } else if (event !== 'TOKEN_REFRESHED') {
+          // Don't clear profile during token refresh — it's likely transient
           setProfile(null);
         }
       }
@@ -112,6 +129,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setSession(null);
     setProfile(null);
+    // Clear vagabond localStorage keys before Supabase signOut
+    // (prevents stale data from reappearing via loadTrips fallback)
+    try {
+      localStorage.removeItem('vagabond_saved_trips_local');
+      localStorage.removeItem('vagabond_traveler_profile');
+    } catch { /* ignore */ }
     supabase.auth.signOut().catch(() => {});
   };
 

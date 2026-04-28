@@ -221,6 +221,21 @@ export interface SavedTrip {
 
 const LOCAL_TRIPS_KEY = "vagabond_saved_trips_local";
 
+/** Read access token directly from localStorage — avoids Supabase client's initializePromise hang */
+function getAccessTokenFromLocalStorage(): string | null {
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const projectRef = supabaseUrl.split('//')[1].split('.')[0];
+    const sessionKey = `sb-${projectRef}-auth-token`;
+    const raw = localStorage.getItem(sessionKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed?.access_token || parsed?.currentSession?.access_token || null;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 /** Load saved trips: merge Supabase + localStorage for logged-in users, localStorage only for guests */
 export async function loadTrips(userId?: string): Promise<SavedTrip[]> {
   // Always load localStorage first (instant, works offline)
@@ -232,22 +247,61 @@ export async function loadTrips(userId?: string): Promise<SavedTrip[]> {
 
   if (userId) {
     try {
-      const { data, error } = await supabase
-        .from("saved_trips")
-        .select("*")
-        .eq("user_id", userId)
-        .order("updated_at", { ascending: false });
+      // Use REST API directly like saveTrip does — the Supabase JS client
+      // blocks ALL calls during initializePromise/token refresh, causing
+      // loadTrips to hang forever. REST with direct JWT bypasses this.
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const accessToken = getAccessTokenFromLocalStorage();
 
-      if (!error && data && data.length > 0) {
-        // Merge: Supabase trips + local trips that aren't in Supabase yet
-        const supabaseIds = new Set(data.map((t: any) => t.trip_name + t.destination));
-        const localOnly = localTrips.filter(
-          (lt) => !supabaseIds.has((lt as any).trip_name + lt.destination)
+      if (supabaseUrl && supabaseAnonKey && accessToken) {
+        console.log('[LoadTrips] Using REST API with direct token, user:', userId);
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/saved_trips?user_id=eq.${userId}&order=updated_at.desc&select=*`,
+          {
+            method: 'GET',
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          }
         );
-        return [...(data as SavedTrip[]), ...localOnly];
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0) {
+            // Merge: Supabase trips + local trips that aren't in Supabase yet
+            const supabaseIds = new Set(data.map((t: any) => t.trip_name + t.destination));
+            const localOnly = localTrips.filter(
+              (lt) => !supabaseIds.has((lt as any).trip_name + lt.destination)
+            );
+            console.log('[LoadTrips] REST loaded', data.length, 'Supabase trips +', localOnly.length, 'local-only');
+            return [...(data as SavedTrip[]), ...localOnly];
+          }
+          console.log('[LoadTrips] REST returned 0 trips for user');
+        } else {
+          const errBody = await response.text();
+          console.warn('[LoadTrips] REST error:', response.status, errBody, '— falling back to localStorage');
+        }
+      } else {
+        console.warn('[LoadTrips] No REST credentials — trying Supabase client fallback');
+        // Last resort: try Supabase client (may hang during token refresh, but better than nothing)
+        const { data, error } = await supabase
+          .from("saved_trips")
+          .select("*")
+          .eq("user_id", userId)
+          .order("updated_at", { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          const supabaseIds = new Set(data.map((t: any) => t.trip_name + t.destination));
+          const localOnly = localTrips.filter(
+            (lt) => !supabaseIds.has((lt as any).trip_name + lt.destination)
+          );
+          return [...(data as SavedTrip[]), ...localOnly];
+        }
       }
-    } catch {
-      // Fall through to localStorage
+    } catch (err) {
+      console.error('[LoadTrips] Error:', err, '— falling back to localStorage');
     }
   }
 
@@ -279,20 +333,8 @@ export async function saveTrip(
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      // Read the access token directly from localStorage — avoids the
-      // supabase.auth.getSession() call which hangs on initializePromise
-      let accessToken: string | null = null;
-      try {
-        // Supabase stores session in localStorage under a key like:
-        // sb-{project-ref}-auth-token
-        const projectRef = supabaseUrl.split('//')[1].split('.')[0];
-        const sessionKey = `sb-${projectRef}-auth-token`;
-        const raw = localStorage.getItem(sessionKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          accessToken = parsed?.access_token || parsed?.currentSession?.access_token || null;
-        }
-      } catch { /* ignore */ }
+      // Reuse shared token reader (same function used by loadTrips)
+      const accessToken = getAccessTokenFromLocalStorage();
 
       if (!accessToken) {
         console.warn('[SaveTrip] No access token in localStorage — falling back to localStorage save');
