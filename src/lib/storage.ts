@@ -275,6 +275,8 @@ export async function saveTrip(
 
     // Try Supabase save — if it fails for any reason, save to localStorage as fallback
     try {
+      // Fire-and-forget insert: no .select() — Supabase free tier with RLS
+      // can hang on .select().single(). Just confirm the insert was sent.
       const insertPromise = supabase
         .from("saved_trips")
         .insert({
@@ -284,21 +286,22 @@ export async function saveTrip(
           inputs: trip.inputs,
           plan: planToSave,
           is_favorite: trip.is_favorite,
-        })
-        .select("id")
-        .single();
+        });
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout: il server non risponde (10s). Riprova.")), 10_000)
+      const timeoutPromise = new Promise<'timeout'>(() =>
+        setTimeout(() => 'timeout' as const, 8_000)
       );
 
       console.log('[SaveTrip] Awaiting insert promise...');
-      const { error, data } = await Promise.race([insertPromise, timeoutPromise]);
-      if (error) {
-        console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
-        throw new Error(error.message);
+      const result = await Promise.race([insertPromise, new Promise<any>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout (8s)")), 8_000)
+      )]);
+
+      if (result?.error) {
+        console.error('[SaveTrip] Supabase error:', JSON.stringify(result.error, null, 2));
+        throw new Error(result.error.message);
       }
-      console.log('[SaveTrip] Saved to Supabase successfully, id:', data?.id);
+      console.log('[SaveTrip] Saved to Supabase successfully');
       return null;
     } catch (err) {
       console.error('[SaveTrip] Supabase save failed, falling back to localStorage:', err);
