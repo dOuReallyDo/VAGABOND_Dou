@@ -275,20 +275,6 @@ export async function saveTrip(
 
     // Try Supabase save — if it fails for any reason, save to localStorage as fallback
     try {
-      // Timeout on getSession too — it can hang if token is refreshing
-      const sessionPromise = supabase.auth.getSession();
-      const sessionTimeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Session check timeout')), 5_000)
-      );
-
-      const { data: sessionData } = await Promise.race([sessionPromise, sessionTimeout]);
-      if (!sessionData?.session) {
-        console.warn('[SaveTrip] No valid session — falling back to localStorage');
-        return saveTripToLocal(trip);
-      }
-
-      console.log('[SaveTrip] Session valid, user:', sessionData.session.user.id);
-
       const insertPromise = supabase
         .from("saved_trips")
         .insert({
