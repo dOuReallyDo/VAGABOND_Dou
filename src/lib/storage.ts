@@ -3,6 +3,64 @@ import type { TravelerProfile } from "./auth";
 import type { TravelInputs } from "../services/travelService";
 
 // =============================================
+// Slim down plan before saving to DB — strip images that are regenerated at runtime
+// =============================================
+
+/** Remove imageUrl/heroImageUrl from plan to reduce payload size.
+ *  Images are resolved at runtime via Unsplash/picsum, no need to persist URLs. */
+function slimPlanForSave(plan: any): any {
+  if (!plan || typeof plan !== 'object') return plan;
+  const slim = JSON.parse(JSON.stringify(plan));
+
+  // Strip heroImageUrl from destinationOverview
+  if (slim.destinationOverview) {
+    delete slim.destinationOverview.heroImageUrl;
+  }
+
+  // Strip imageUrl from itinerary activities
+  if (Array.isArray(slim.itinerary)) {
+    for (const day of slim.itinerary) {
+      if (Array.isArray(day.activities)) {
+        for (const act of day.activities) {
+          delete act.imageUrl;
+        }
+      }
+    }
+  }
+
+  // Strip imageUrl from attractions
+  if (Array.isArray(slim.destinationOverview?.attractions)) {
+    for (const attr of slim.destinationOverview.attractions) {
+      delete attr.imageUrl;
+    }
+  }
+
+  // Strip imageUrl from accommodations
+  if (Array.isArray(slim.accommodations)) {
+    for (const stop of slim.accommodations) {
+      if (Array.isArray(stop.options)) {
+        for (const opt of stop.options) {
+          delete opt.imageUrl;
+        }
+      }
+    }
+  }
+
+  // Strip imageUrl from restaurants
+  if (Array.isArray(slim.bestRestaurants)) {
+    for (const stop of slim.bestRestaurants) {
+      if (Array.isArray(stop.options)) {
+        for (const opt of stop.options) {
+          delete opt.imageUrl;
+        }
+      }
+    }
+  }
+
+  return slim;
+}
+
+// =============================================
 // Profile Storage (Supabase + localStorage fallback)
 // =============================================
 
@@ -117,14 +175,14 @@ export async function saveTrip(
 ): Promise<SavedTrip | null> {
   if (userId) {
     const TIMEOUT_MS = 10_000;
-    const insertPromise = supabase
+      const insertPromise = supabase
       .from("saved_trips")
       .insert({
         user_id: userId,
         trip_name: trip.trip_name,
         destination: trip.destination,
         inputs: trip.inputs,
-        plan: trip.plan,
+        plan: slimPlanForSave(trip.plan),
         is_favorite: trip.is_favorite,
       })
       .select()
@@ -135,7 +193,13 @@ export async function saveTrip(
     );
 
     const { data, error } = await Promise.race([insertPromise, timeoutPromise]);
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
+      console.error('[SaveTrip] Payload plan keys:', Object.keys(trip.plan || {}));
+      const planSize = new Blob([JSON.stringify(trip.plan)]).size;
+      console.error('[SaveTrip] Plan JSON size:', (planSize / 1024).toFixed(1), 'KB');
+      throw new Error(error.message);
+    }
     return data as SavedTrip;
   }
 

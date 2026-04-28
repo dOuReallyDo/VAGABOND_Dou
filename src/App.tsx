@@ -684,13 +684,17 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
     setSaveError(null);
     try {
       const tripName = plan.destinationOverview?.title || inputs?.destination || 'Viaggio';
-      await saveTrip({
+      const payload = {
         trip_name: tripName,
         destination: inputs?.destination || '',
         inputs,
         plan,
         is_favorite: false,
-      }, user.id);
+      };
+      // Diagnostic: log payload size
+      const payloadSize = new Blob([JSON.stringify(payload)]).size;
+      console.log('[SaveTrip] Payload size:', (payloadSize / 1024).toFixed(1), 'KB');
+      await saveTrip(payload, user.id);
       setSavedFeedback('saved');
       // Mantiene "Salvato!" permanentemente — non torna a idle così non si può ri-cliccare
     } catch (err) {
