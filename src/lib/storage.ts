@@ -221,8 +221,15 @@ export interface SavedTrip {
 
 const LOCAL_TRIPS_KEY = "vagabond_saved_trips_local";
 
-/** Load saved trips: try Supabase, fall back to localStorage */
+/** Load saved trips: merge Supabase + localStorage for logged-in users, localStorage only for guests */
 export async function loadTrips(userId?: string): Promise<SavedTrip[]> {
+  // Always load localStorage first (instant, works offline)
+  let localTrips: SavedTrip[] = [];
+  try {
+    const stored = localStorage.getItem(LOCAL_TRIPS_KEY);
+    if (stored) localTrips = JSON.parse(stored);
+  } catch { /* ignore */ }
+
   if (userId) {
     try {
       const { data, error } = await supabase
@@ -231,21 +238,20 @@ export async function loadTrips(userId?: string): Promise<SavedTrip[]> {
         .eq("user_id", userId)
         .order("updated_at", { ascending: false });
 
-      if (!error && data) return data as SavedTrip[];
+      if (!error && data && data.length > 0) {
+        // Merge: Supabase trips + local trips that aren't in Supabase yet
+        const supabaseIds = new Set(data.map((t: any) => t.trip_name + t.destination));
+        const localOnly = localTrips.filter(
+          (lt) => !supabaseIds.has((lt as any).trip_name + lt.destination)
+        );
+        return [...(data as SavedTrip[]), ...localOnly];
+      }
     } catch {
       // Fall through to localStorage
     }
   }
 
-  // Fallback: localStorage (for guests)
-  try {
-    const stored = localStorage.getItem(LOCAL_TRIPS_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {
-    // ignore
-  }
-
-  return [];
+  return localTrips;
 }
 
 /** Save a trip — throws if userId is provided but Supabase save fails */
