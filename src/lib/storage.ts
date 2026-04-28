@@ -254,16 +254,9 @@ export async function saveTrip(
   userId?: string
 ): Promise<SavedTrip | null> {
   if (userId) {
-    // Ensure we have a valid Supabase session before attempting insert
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session) {
-      throw new Error('Sessione scaduta — effettua di nuovo il login');
-    }
-
     const slimPlan = slimPlanForSave(trip.plan);
     const planSize = new Blob([JSON.stringify(slimPlan)]).size;
     console.log('[SaveTrip] Plan JSON size:', (planSize / 1024).toFixed(1), 'KB');
-    console.log('[SaveTrip] Session valid, user:', sessionData.session.user.id);
 
     // If plan is still huge (>800KB), strip verbose fields to fit Supabase limits
     let planToSave = slimPlan;
@@ -274,53 +267,62 @@ export async function saveTrip(
       console.log('[SaveTrip] After strip:', (newSize / 1024).toFixed(1), 'KB');
     }
 
-    const TIMEOUT_MS = 10_000;
-    const maxRetries = 2;
-    let lastError: any = null;
+    // Try Supabase save — if it fails for any reason, save to localStorage as fallback
+    try {
+      // Timeout on getSession too — it can hang if token is refreshing
+      const sessionPromise = supabase.auth.getSession();
+      const sessionTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Session check timeout')), 5_000)
+      );
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[SaveTrip] Attempt ${attempt + 1}/${maxRetries + 1}...`);
-
-        // Use .select() to force Supabase to confirm the insert.
-        // Without .select(), the promise may never resolve on the free tier with RLS.
-        const insertPromise = supabase
-          .from("saved_trips")
-          .insert({
-            user_id: userId,
-            trip_name: trip.trip_name,
-            destination: trip.destination,
-            inputs: trip.inputs,
-            plan: planToSave,
-            is_favorite: trip.is_favorite,
-          })
-          .select("id")
-          .single();
-
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout: il server non risponde (10s). Riprova.")), TIMEOUT_MS)
-        );
-
-        const { error, data } = await Promise.race([insertPromise, timeoutPromise]);
-        if (error) {
-          console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
-          throw new Error(error.message);
-        }
-        console.log('[SaveTrip] Saved successfully, id:', data?.id);
-        return null;
-      } catch (err) {
-        lastError = err;
-        if (attempt < maxRetries) {
-          console.warn(`[SaveTrip] Attempt ${attempt + 1} failed, retrying in 2s...`, err);
-          await new Promise(r => setTimeout(r, 2000));
-        }
+      const { data: sessionData } = await Promise.race([sessionPromise, sessionTimeout]);
+      if (!sessionData?.session) {
+        console.warn('[SaveTrip] No valid session — falling back to localStorage');
+        return saveTripToLocal(trip);
       }
+
+      console.log('[SaveTrip] Session valid, user:', sessionData.session.user.id);
+
+      const insertPromise = supabase
+        .from("saved_trips")
+        .insert({
+          user_id: userId,
+          trip_name: trip.trip_name,
+          destination: trip.destination,
+          inputs: trip.inputs,
+          plan: planToSave,
+          is_favorite: trip.is_favorite,
+        })
+        .select("id")
+        .single();
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout: il server non risponde (10s). Riprova.")), 10_000)
+      );
+
+      console.log('[SaveTrip] Awaiting insert promise...');
+      const { error, data } = await Promise.race([insertPromise, timeoutPromise]);
+      if (error) {
+        console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
+        throw new Error(error.message);
+      }
+      console.log('[SaveTrip] Saved to Supabase successfully, id:', data?.id);
+      return null;
+    } catch (err) {
+      console.error('[SaveTrip] Supabase save failed, falling back to localStorage:', err);
+      return saveTripToLocal(trip);
     }
-    throw lastError;
   }
 
-  // Guest fallback: localStorage only when not authenticated
-  const trips = await loadTrips();
+  // Not authenticated: localStorage only
+  return saveTripToLocal(trip);
+}
+
+/** Save trip to localStorage (used as fallback when Supabase fails) */
+function saveTripToLocal(
+  trip: Omit<SavedTrip, "id" | "created_at" | "updated_at">
+): SavedTrip {
+  const trips = JSON.parse(localStorage.getItem(LOCAL_TRIPS_KEY) || '[]') as SavedTrip[];
   const newTrip: SavedTrip = {
     ...trip,
     id: crypto.randomUUID(),
@@ -329,6 +331,7 @@ export async function saveTrip(
   };
   trips.unshift(newTrip);
   localStorage.setItem(LOCAL_TRIPS_KEY, JSON.stringify(trips));
+  console.log('[SaveTrip] Saved to localStorage, id:', newTrip.id);
   return newTrip;
 }
 
