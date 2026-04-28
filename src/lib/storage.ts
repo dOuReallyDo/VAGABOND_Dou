@@ -274,13 +274,16 @@ export async function saveTrip(
       console.log('[SaveTrip] After strip:', (newSize / 1024).toFixed(1), 'KB');
     }
 
-    const TIMEOUT_MS = 15_000;
+    const TIMEOUT_MS = 10_000;
     const maxRetries = 2;
     let lastError: any = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         console.log(`[SaveTrip] Attempt ${attempt + 1}/${maxRetries + 1}...`);
+
+        // Use .select() to force Supabase to confirm the insert.
+        // Without .select(), the promise may never resolve on the free tier with RLS.
         const insertPromise = supabase
           .from("saved_trips")
           .insert({
@@ -290,18 +293,20 @@ export async function saveTrip(
             inputs: trip.inputs,
             plan: planToSave,
             is_favorite: trip.is_favorite,
-          });
+          })
+          .select("id")
+          .single();
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout: il server non risponde (15s)")), TIMEOUT_MS)
+          setTimeout(() => reject(new Error("Timeout: il server non risponde (10s). Riprova.")), TIMEOUT_MS)
         );
 
-        const { error } = await Promise.race([insertPromise, timeoutPromise]);
+        const { error, data } = await Promise.race([insertPromise, timeoutPromise]);
         if (error) {
           console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
           throw new Error(error.message);
         }
-        console.log('[SaveTrip] Saved successfully');
+        console.log('[SaveTrip] Saved successfully, id:', data?.id);
         return null;
       } catch (err) {
         lastError = err;
