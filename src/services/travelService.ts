@@ -424,44 +424,105 @@ Restituisci SOLO il JSON aggiornato.
   }
 };
 
+// ─── Country lookup cache ────────────────────────────────────────────────────
+// In-memory cache for Nominatim results. Key: lowercase trimmed query.
+const countryCache = new Map<string, string[]>();
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const cacheTimestamps = new Map<string, number>();
+
+// Italian country name mapping (ISO → Italian)
+const COUNTRY_IT: Record<string, string> = {
+  AF:'Afghanistan',AL:'Albania',DZ:'Algeria',AD:'Andorra',AO:'Angola',AG:'Antigua e Barbuda',
+  AR:'Argentina',AM:'Armenia',AU:'Australia',AT:'Austria',AZ:'Azerbaigian',BS:'Bahamas',
+  BH:'Bahrein',BD:'Bangladesh',BB:'Barbados',BE:'Belgio',BZ:'Belize',BJ:'Benin',
+  BT:'Bhutan',BY:'Bielorussia',MM:'Birmania',BO:'Bolivia',BA:'Bosnia ed Erzegovina',
+  BW:'Botswana',BR:'Brasile',BN:'Brunei',BG:'Bulgaria',BF:'Burkina Faso',BI:'Burundi',
+  KH:'Cambogia',CM:'Camerun',CA:'Canada',CV:'Capo Verde',CF:'Repubblica Centrafricana',
+  TD:'Ciad',CL:'Cile',CN:'Cina',CO:'Colombia',KM:'Comore',CG:'Congo',CD:'Congo (RDC)',
+  CR:'Costa Rica',CI:'Costa d\'Avorio',HR:'Croazia',CU:'Cuba',CW:'Curaçao',CY:'Cipro',
+  CZ:'Repubblica Ceca',DK:'Danimarca',DJ:'Gibuti',DM:'Dominica',DO:'Repubblica Dominicana',
+  EC:'Ecuador',EG:'Egitto',SV:'El Salvador',AE:'Emirati Arabi Uniti',ER:'Eritrea',
+  EE:'Estonia',SZ:'eSwatini',ET:'Etiopia',FJ:'Figi',PH:'Filippine',FI:'Finlandia',
+  FR:'Francia',GA:'Gabon',GM:'Gambia',GE:'Georgia',DE:'Germania',GH:'Ghana',
+  GR:'Grecia',GD:'Grenada',GT:'Guatemala',GN:'Guinea',GW:'Guinea-Bissau',GY:'Guyana',
+  HT:'Haiti',HN:'Honduras',HU:'Ungheria',IS:'Islanda',IN:'India',ID:'Indonesia',
+  IR:'Iran',IQ:'Iraq',IE:'Irlanda',IL:'Israele',IT:'Italia',JM:'Giamaica',JP:'Giappone',
+  JO:'Giordania',KZ:'Kazakistan',KE:'Kenya',KG:'Kirghizistan',KI:'Kiribati',
+  KP:'Corea del Nord',KR:'Corea del Sud',KW:'Kuwait',LA:'Laos',LV:'Lettonia',
+  LB:'Libano',LS:'Lesotho',LR:'Liberia',LY:'Libia',LI:'Liechtenstein',LT:'Lituania',
+  LU:'Lussemburgo',MG:'Madagascar',MW:'Malawi',MY:'Malaysia',MV:'Maldive',ML:'Mali',
+  MT:'Malta',MA:'Marocco',MH:'Isole Marshall',MR:'Mauritania',MU:'Mauritius',
+  MX:'Messico',FM:'Micronesia',MD:'Moldavia',MC:'Monaco',MN:'Mongolia',ME:'Montenegro',
+  MA2:'Marocco',MZ:'Mozambico',NA:'Namibia',NR:'Nauru',NP:'Nepal',NI:'Nicaragua',
+  NE:'Niger',NG:'Nigeria',MK:'Macedonia del Nord',NO:'Norvegia',OM:'Oman',NL:'Paesi Bassi',
+  NZ:'Nuova Zelanda',PA:'Panamá',PK:'Pakistan',PW:'Palau',PS:'Palestina',PY:'Paraguay',
+  PE:'Perù',PG:'Papua Nuova Guinea',PK2:'Pakistan',PL:'Polonia',PT:'Portogallo',
+  PR:'Portorico',QA:'Qatar',GB:'Regno Unito',RO:'Romania',RW:'Ruanda',RU:'Russia',
+  KN:'Saint Kitts e Nevis',LC:'Saint Lucia',VC:'Saint Vincent e Grenadine',
+  WS:'Samoa',SM:'San Marino',ST:'São Tomé e Príncipe',SA:'Arabia Saudita',SN:'Senegal',
+  RS:'Serbia',SC:'Seychelles',SL:'Sierra Leone',SG:'Singapore',SK:'Slovacchia',
+  SI:'Slovenia',SO:'Somalia',ES:'Spagna',LK:'Sri Lanka',US:'Stati Uniti',SD:'Sudan',
+  SS:'Sudan del Sud',SR:'Suriname',SE:'Svezia',CH:'Svizzera',SY:'Siria',
+  TJ:'Tagikistan',TW:'Taiwan',TZ:'Tanzania',TH:'Thailandia',TL:'Timor Est',
+  TG:'Togo',TO:'Tonga',TT:'Trinidad e Tobago',TN:'Tunisia',TR:'Turchia',
+  TM:'Turkmenistan',TV:'Tuvalu',UG:'Uganda',UA:'Ucraina',UY:'Uruguay',UZ:'Uzbekistan',
+  VU:'Vanuatu',VA:'Città del Vaticano',VE:'Venezuela',VN:'Vietnam',YE:'Yemen',
+  ZM:'Zambia',ZW:'Zimbabwe',EH:'Sahara Occidentale',PS2:'Palestina',
+};
+
+function countryNameIT(code: string): string {
+  return COUNTRY_IT[code] || code;
+}
+
 export const getDestinationCountries = async (destination: string): Promise<string[]> => {
-  const apiKey = await getApiKey();
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  const key = destination.trim().toLowerCase();
 
-  const prompt = `Analizza il nome "${destination}" e cerca TUTTI i possibili luoghi nel mondo con quel nome (città, regioni, isole, nazioni).
-Considera anche varianti ortografiche e nomi simili (es. "Valenza" include sia Valenza Po in Italia che Valencia in Spagna; "Valencia" include Spagna e Venezuela).
-Includi anche luoghi meno noti se esistono.
-
-Regole:
-- Elenca TUTTE le nazioni in cui esiste un luogo con quel nome o un nome molto simile
-- Se è già un nome di nazione, includi quella nazione
-- Non escludere nessuna opzione plausibile, meglio avere qualche opzione in più che mancarne una
-- Nomi in italiano
-
-Restituisci SOLO un array JSON di stringhe. Esempio: ["Italia", "Spagna"] oppure ["Francia"].`;
+  // Check cache
+  const now = Date.now();
+  if (countryCache.has(key) && (now - (cacheTimestamps.get(key) ?? 0)) < CACHE_TTL_MS) {
+    return countryCache.get(key)!;
+  }
 
   try {
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 256,
-      messages: [{ role: "user", content: prompt }],
+    // Use Nominatim (OpenStreetMap) — free, no API key, instant, no token cost
+    const params = new URLSearchParams({
+      q: destination.trim(),
+      format: 'json',
+      limit: '20',
+      addressdetails: '1',
+      'accept-language': 'it',
+    });
+    const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'LeoWanderTravelApp/1.0' },
     });
 
-    let text = extractText(response.content);
-    text = text.replace(/^```json\s*/, "").replace(/```$/, "").trim();
-
-    // Extract array from text
-    const arrStart = text.indexOf("[");
-    const arrEnd = text.lastIndexOf("]");
-    if (arrStart !== -1 && arrEnd !== -1) {
-      text = text.substring(arrStart, arrEnd + 1);
+    if (!res.ok) {
+      console.warn('[getDestinationCountries] Nominatim error:', res.status, await res.text());
+      return [];
     }
 
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed;
-    return [];
+    const data = await res.json() as Array<{ address?: Record<string, string>; country_code?: string }>;
+
+    // Extract unique country codes, map to Italian names
+    const countrySet = new Set<string>();
+    for (const item of data) {
+      const cc = item.country_code || item.address?.country_code;
+      if (cc) {
+        countrySet.add(countryNameIT(cc.toUpperCase()));
+      }
+    }
+
+    const countries = Array.from(countrySet).sort();
+
+    // Cache the result
+    countryCache.set(key, countries);
+    cacheTimestamps.set(key, now);
+
+    return countries;
   } catch (e) {
-    console.error("Errore nel recupero delle nazioni:", e);
+    console.error('[getDestinationCountries] Error:', e);
     return [];
   }
 };
