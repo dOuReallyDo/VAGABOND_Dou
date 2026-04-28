@@ -44,7 +44,10 @@ export async function searchUnsplashImage(
   orientation: 'landscape' | 'portrait' | 'squarish' = 'landscape'
 ): Promise<string | null> {
   const accessKey = getAccessKey();
-  if (!accessKey) return null;
+  if (!accessKey) {
+    console.info('[Unsplash] No VITE_UNSPLASH_ACCESS_KEY set — skipping image search. Add it to .env or Vercel env vars.');
+    return null;
+  }
 
   const cacheKey = `${keywords.toLowerCase().trim()}|${orientation}`;
   cleanCache();
