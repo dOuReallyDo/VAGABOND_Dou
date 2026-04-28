@@ -45,7 +45,8 @@ VAGABOND_Dou implements a 3-layer URL protection system to prevent users from be
   - Suspicious TLDs (.xyz, .top, .click, etc.) → replaced
   - HTTP (non-HTTPS) URLs → replaced
   - URLs with redirect parameters (utm_, fbclid, etc.) → stripped or replaced
-- **Unknown domains**: flagged for Safe Browsing API verification (Layer 3)
+- **Unknown but structurally valid domains**: batch-verified via Google Safe Browsing API. If API says safe → **original URL kept** (e.g., hotel official sites). If unsafe → replaced.
+- Console logs `[URL Safety]` for debugging which URLs are kept vs replaced.
 
 **Replacement policy — unsafe URLs are REMOVED and REPLACED, never shown with warnings:**
 | Category | Replacement |
