@@ -25,3 +25,49 @@
 - User-generated content (notes, destination searches) is sanitized before inclusion in prompts
 - No user content is stored in training data by Anthropic (per their policy)
 - Image URLs validated against hotlink-blacklisted domains
+
+## URL Safety System
+
+VAGABOND_Dou implements a 3-layer URL protection system to prevent users from being exposed to malicious, phishing, or inappropriate links:
+
+### Layer 1: Prompt-level Filtering
+- The AI prompt includes a "🔗 SICUREZZA DEI LINK" section with an explicit whitelist of 80+ trusted domains
+- Claude is instructed to only use URLs from these domains
+- Rules: no URL shorteners, no IP addresses, no suspicious TLDs, no HTTP URLs, no redirect parameters
+- `bookingUrl` must be Booking.com or official hotel site; `sourceUrl` must be a trusted domain
+
+### Layer 2: Post-processing Sanitization (`src/lib/urlSafety.ts`)
+- `sanitizeTravelPlan()` processes every URL field in TravelPlan objects before display
+- **Whitelisted domains**: pass through unchanged (80+ entries including booking.com, tripadvisor.com, google.com, etc.)
+- **Structurally invalid URLs**: immediately replaced with safe alternatives:
+  - IP addresses as host → replaced
+  - URL shorteners (bit.ly, tinyurl, etc.) → replaced
+  - Suspicious TLDs (.xyz, .top, .click, etc.) → replaced
+  - HTTP (non-HTTPS) URLs → replaced
+  - URLs with redirect parameters (utm_, fbclid, etc.) → stripped or replaced
+- **Unknown domains**: flagged for Safe Browsing API verification (Layer 3)
+
+**Replacement policy — unsafe URLs are REMOVED and REPLACED, never shown with warnings:**
+| Category | Replacement |
+|----------|------------|
+| Hotel/Booking | Booking.com search URL (with dates & guests from travelInputs) |
+| Restaurant | TripAdvisor search URL |
+| Attraction | TripAdvisor search URL |
+| Flight | Google search for airline official site |
+| Transport | Google Maps link |
+| Travel Blog | Removed entirely |
+| Images from non-whitelisted CDNs | Removed (falls back to picsum.photos) |
+
+### Layer 3: Google Safe Browsing API (`src/lib/safeBrowsing.ts` + `server.ts`)
+- Unknown domains (not in whitelist, not structurally invalid) are checked against Google's Safe Browsing database
+- Client calls `POST /api/check-url` which proxies to Google's API
+- Server endpoint reads `GOOGLE_SAFE_BROWSING_API_KEY` from env
+- **If no API key configured**: system operates in whitelist-only mode — all unknown domains are treated as unsafe and replaced
+- **If API error occurs**: fails closed (assumes unsafe)
+- In-memory cache with 1-hour TTL to minimize API calls
+
+### Safe Alternative Generation
+- `generateSafeAlternative()` creates contextually appropriate replacement URLs
+- Booking.com search URLs include travel dates, guest count, and destination from `TravelInputs`
+- TripAdvisor and Google Maps searches use the entity name
+- All replacements are functional search URLs, not dead links

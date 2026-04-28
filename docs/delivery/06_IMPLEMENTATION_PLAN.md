@@ -7,6 +7,8 @@
 5) UI: form + loading/error + results rendering
 6) QA + release playbook + production deploy
 
+**✅ Implemented: URL Safety system** (3-layer: prompt-level whitelist, post-processing sanitization via `sanitizeTravelPlan()`, Google Safe Browsing API). See `src/lib/urlSafety.ts`, `src/lib/safeBrowsing.ts`, and `SECURITY.md` for details.
+
 Each milestone must include:
 - what changed + file paths
 - how to test

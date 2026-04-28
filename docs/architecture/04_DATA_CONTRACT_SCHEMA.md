@@ -55,6 +55,17 @@ Invariato rispetto a Vagabond originale. Vedere `src/shared/contract.ts` per lo 
 
 Campi principali: `budgetWarning`, `destinationOverview`, `weatherInfo`, `safetyAndHealth`, `itinerary`, `budgetBreakdown`, `flights`, `accommodations`, `bestRestaurants`, `mapPoints`, `localTips`, `transportInfo`, `travelBlogs`, `travelHighlights`.
 
+## ⚠️ TravelPlan Sanitization (URL Safety)
+
+All TravelPlan objects are sanitized via `sanitizeTravelPlan()` (in `src/lib/urlSafety.ts`) before being rendered or saved:
+
+- **Every URL field** (`bookingUrl`, `sourceUrl`, `website`, `imageUrl`, `mapUrl`, etc.) is checked against a whitelist of 80+ trusted domains
+- **Structurally invalid URLs** (IP addresses, shorteners, suspicious TLDs, HTTP, redirect parameters) are replaced with safe alternatives
+- **Unknown domains** are verified against the Google Safe Browsing API (if `GOOGLE_SAFE_BROWSING_API_KEY` is configured)
+- Unsafe URLs are **removed and replaced**, never shown with warnings — the user only ever sees safe, functional URLs
+
+This sanitization happens in `App.tsx` after every plan generation or modification, before the plan is stored in React state.
+
 ## Profile: TravelerProfile (Supabase)
 
 ```typescript

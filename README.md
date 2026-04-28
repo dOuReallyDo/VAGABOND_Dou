@@ -11,6 +11,7 @@ Fork di [Vagabond AI](https://github.com/dOuReallyDo/Vagabond) con profilo viagg
 - **💡 Note Intelligenti**: Suggerimenti cliccabili per arricchire le note del viaggio
 - **🧠 Prompt Enrichment**: Il profilo viaggiatore viene iniettato nel prompt Claude per itinerari ultra-personalizzati
 - **📱 localStorage Fallback**: Funziona anche senza login (profilo e viaggi salvati localmente)
+- **🔒 URL Safety**: 3-layer protection per tutti i link — whitelist, structural validation, Google Safe Browsing API
 
 ## ✨ Caratteristiche Principali (ereditate)
 - **Itinerari Dinamici**: Generazione di piani giornalieri dettagliati
@@ -19,6 +20,16 @@ Fork di [Vagabond AI](https://github.com/dOuReallyDo/Vagabond) con profilo viagg
 - **Visual Experience**: Immagini dinamiche per ogni tappa
 - **Budget Intelligence**: Breakdown automatico dei costi
 - **Seasonal Awareness**: Suggerimenti basati sul periodo
+
+## 🔒 Sicurezza degli URL
+
+Il sistema implementa una protezione a 3 livelli per tutti i link generati dall'AI:
+
+1. **Prompt-level**: Claude riceve istruzioni esplicite di usare solo domini fidati
+2. **Post-processing**: `sanitizeTravelPlan()` verifica ogni URL — i domini whitelist passano, gli URL strutturalmente sospetti (IP, shortener, TLD sospetti, HTTP, redirect params) vengono sostituiti con alternative sicure (Booking.com, TripAdvisor, Google Maps)
+3. **Google Safe Browsing API** (opzionale): gli URL su domini sconosciuti vengono verificati contro il database malware/phishing di Google
+
+Politica: gli URL non sicuri vengono **rimossi e sostituiti**, mai mostrati con avvisi.
 
 ## 🛠️ Tech Stack
 
@@ -52,7 +63,9 @@ src/
 ├── lib/
 │   ├── auth.tsx                # Auth context + hooks (Supabase)
 │   ├── storage.ts              # Profile + trips CRUD (Supabase + localStorage)
-│   └── supabase.ts             # Supabase client
+│   ├── supabase.ts             # Supabase client
+│   ├── urlSafety.ts            # URL whitelist, validation, sanitization
+│   └── safeBrowsing.ts         # Google Safe Browsing API client + cache
 supabase/
 └── schema.sql                  # DB schema (profiles, saved_trips)
 ```
@@ -75,6 +88,7 @@ Crea un file `.env` nella root:
 ANTHROPIC_API_KEY=sk-ant-...
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+GOOGLE_SAFE_BROWSING_API_KEY=your-key
 ```
 
 ### 3. Supabase Setup

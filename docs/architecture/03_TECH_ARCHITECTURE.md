@@ -43,11 +43,17 @@ React SPA + Express server proxy + Anthropic Claude AI + Supabase (auth + persis
 │  │ Supabase  │  │TravelSvc │  │   Storage Layer   │ │
 │  │  Client   │  │(Claude)  │  │ (Supabase+lclStr) │ │
 │  └───────────┘  └─────┬────┘  └──────────────────┘ │
+│                       │                               │
+│  ┌────────────────────▼────────────────────────────┐  │
+│  │           URL Safety Layer                       │  │
+│  │  sanitizeTravelPlan() + Safe Browsing API check  │  │
+│  └─────────────────────────────────────────────────┘  │
 └───────────────────────┼─────────────────────────────┘
                         │
               ┌─────────▼─────────┐
               │  Express Server   │
               │  /api/config      │──▶ Anthropic API Key
+              │  /api/check-url   │──▶ Google Safe Browsing API
               │  /api/health      │
               │  Vite middleware   │
               │  (dev mode)       │
@@ -61,7 +67,8 @@ React SPA + Express server proxy + Anthropic Claude AI + Supabase (auth + persis
 2. User fills travel details (Step 2) → includes `travelerProfile` in payload
 3. `travelService.ts` builds prompt with profile enrichment
 4. Claude API returns JSON → validated by `TravelPlanSchema`
-5. Plan rendered in UI → auto-saved via Storage layer
+5. **`sanitizeTravelPlan()` processes all URLs** — whitelist check, structural validation, Safe Browsing API verification, replacement of unsafe URLs with safe alternatives
+6. Sanitized plan rendered in UI → auto-saved via Storage layer
 
 ### Auth Flow
 1. Login/Signup via Supabase Auth
@@ -89,5 +96,6 @@ React SPA + Express server proxy + Anthropic Claude AI + Supabase (auth + persis
 | Variable | Where | Purpose |
 |----------|-------|---------|
 | `ANTHROPIC_API_KEY` | server-side | Claude API access |
+| `GOOGLE_SAFE_BROWSING_API_KEY` | server-side | Safe Browsing API (optional; without it, whitelist-only mode) |
 | `VITE_SUPABASE_URL` | client-side | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | client-side | Supabase public key |

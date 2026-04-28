@@ -7,6 +7,7 @@ Tech Lead + Product Engineer: break down work, propose alternatives, enforce qua
 - Backend: API proxy, security, tools
 - Frontend: widget UI & rendering
 - QA: tests, checklists, release gates
+- Security: URL Safety layer (whitelist + sanitization + Safe Browsing API integration)
 
 ## Workflow (mandatory)
 Every task output includes:
