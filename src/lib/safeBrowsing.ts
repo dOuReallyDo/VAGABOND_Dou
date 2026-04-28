@@ -53,7 +53,14 @@ export async function checkUrlSafety(url: string): Promise<SafeBrowsingResult> {
       return { safe: false, threats: ['API_ERROR'] };
     }
 
-    const data = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      console.warn(`Safe Browsing API response not JSON for ${url}`);
+      return { safe: false, threats: ['API_ERROR'] };
+    }
+
     const result = data.results?.[url];
 
     if (result) {
@@ -106,13 +113,24 @@ export async function checkUrlsSafety(urls: string[]): Promise<Map<string, SafeB
 
     if (!response.ok) {
       // API failure — fail closed for all uncached URLs
+      console.warn(`[SafeBrowsing] API returned ${response.status} ${response.statusText}`);
       for (const url of uncached) {
         results.set(url, { safe: false, threats: ['API_ERROR'] });
       }
       return results;
     }
 
-    const data = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch (parseErr) {
+      // Response is not JSON (e.g., 405 returns HTML from SPA rewrite)
+      console.warn('[SafeBrowsing] API response is not valid JSON:', parseErr);
+      for (const url of uncached) {
+        results.set(url, { safe: false, threats: ['API_ERROR'] });
+      }
+      return results;
+    }
 
     for (const url of uncached) {
       const result = data.results?.[url];
