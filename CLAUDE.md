@@ -70,22 +70,30 @@ React context (`AuthProvider`) wrapping Supabase auth. Exposes:
 
 ### Storage (`src/lib/storage.ts`)
 
-All persistence functions use Supabase when authenticated, with localStorage as fallback for guests:
+All persistence functions use Supabase REST API when authenticated, with localStorage as fallback for guests:
 - `loadProfile` / `saveProfile` — traveler profile CRUD
 - `loadTrips` / `saveTrip` / `deleteTrip` / `toggleFavorite` — saved trips CRUD
 - `migrateLocalTripsToSupabase(userId)` — called after login to migrate guest data
+- `getAccessTokenFromLocalStorage()` — shared helper that reads JWT directly from localStorage key `sb-{ref}-auth-token`
 
-### Supabase Save Trip (CRITICAL — read if saving breaks)
+### Supabase Save/Load Trip (CRITICAL — read if saving or loading breaks)
 
-`saveTrip()` in `src/lib/storage.ts` bypasses the Supabase JS client entirely for saves:
-- **Root cause of hangs**: The Supabase JS client has an `initializePromise` that blocks ALL API calls (getSession, insert, etc.) while refreshing auth tokens. On Vercel free tier, this can hang forever.
-- **Fix**: `saveTrip()` now uses **REST API via `fetch()`** directly, reading the JWT access token from `localStorage` key `sb-{projectRef}-auth-token` (synchronous, instant, no network call).
-- POST to `{SUPABASE_URL}/rest/v1/saved_trips` with `Authorization: Bearer {token}` and `apikey: {anonKey}` headers.
-- If REST call fails (no token, timeout, error) → falls back to `saveTripToLocal()` (localStorage).
+Both `saveTrip()` and `loadTrips()` bypass the Supabase JS client entirely, using REST API via `fetch()`:
+
+**Root cause of hangs & disappearing trips**: The Supabase JS client has an `initializePromise` that blocks ALL API calls (getSession, insert, select, etc.) while refreshing auth tokens. On Vercel free tier, this can hang forever. Also, `onAuthStateChange` fires with `session=null` during token refresh, causing false logouts.
+
+**Fixes applied**:
+- `saveTrip()`: POST to `{SUPABASE_URL}/rest/v1/saved_trips` with `Authorization: Bearer {token}` and `apikey: {anonKey}`. Falls back to `saveTripToLocal()` (localStorage) on failure.
+- `loadTrips()`: GET to `{SUPABASE_URL}/rest/v1/saved_trips?user_id=eq.{userId}` with same auth. Falls back to Supabase client only if no REST credentials, then to localStorage.
 - `loadTrips()` merges Supabase + localStorage trips, deduplicating by trip_name+destination.
+- `onAuthStateChange`: Only clears user/session on explicit `SIGNED_OUT` event. Ignores transient null sessions during `TOKEN_REFRESHED` (prevents false logouts after save).
+- After `saveTrip()`, `onTripSaved` prop + `tripsVersion` counter triggers `loadTrips` in FormView (trips list refreshes immediately).
+- `signOut()` clears `vagabond_saved_trips_local` and `vagabond_traveler_profile` from localStorage before Supabase signOut.
 - **`persistSession: true`** in supabase.ts (was `false`, caused session loss on Vercel → RLS blocks saves).
 
-**Key files**: `src/lib/storage.ts` (saveTrip, loadTrips, saveTripToLocal), `src/lib/supabase.ts` (persistSession), `src/lib/auth.tsx` (AuthProvider)
+**Shared helper**: `getAccessTokenFromLocalStorage()` reads JWT from `localStorage` key `sb-{projectRef}-auth-token` (synchronous, instant, no network call). Used by both `saveTrip()` and `loadTrips()`.
+
+**Key files**: `src/lib/storage.ts` (saveTrip, loadTrips, saveTripToLocal, getAccessTokenFromLocalStorage), `src/lib/supabase.ts` (persistSession), `src/lib/auth.tsx` (AuthProvider, onAuthStateChange)
 
 ### Main App (`src/App.tsx`)
 
