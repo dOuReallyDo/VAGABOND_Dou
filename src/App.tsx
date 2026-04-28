@@ -20,6 +20,7 @@ import { TravelMap } from './components/TravelMap';
 import { useAuth } from './lib/auth';
 import { loadProfile, saveProfile, loadTrips, saveTrip, deleteTrip, toggleFavorite, migrateLocalTripsToSupabase, type SavedTrip } from './lib/storage';
 import { sanitizeTravelPlan } from './lib/urlSafety';
+import { searchUnsplashImage } from './services/unsplashService';
 import { AuthForm } from './components/AuthForm';
 import { supabase } from './lib/supabase';
 import { ProfileForm, type TravelerProfileForm } from './components/ProfileForm';
@@ -57,9 +58,19 @@ const getHeroImage = (seed: number) => {
   return pool[seed % pool.length];
 };
 
-// Immagine da screenshot o fallback dinamico (Unsplash)
-const getImageUrl = (item: any, keyword: string) => {
-  // Se l'IA ha fornito un URL immagine che sembra valido, proviamo a usarlo
+// Immagine da Unsplash (priorità), AI-provided URL, o fallback picsum
+const getImageUrl = (item: any, keyword: string, unsplashMap?: Map<string, string>) => {
+  // 1. Se abbiamo una immagine Unsplash coerente, usala
+  const kw = keyword.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (unsplashMap) {
+    // Try exact match first, then progressively shorter prefixes
+    for (const tryKey of [kw, kw.split(' ').slice(0, 3).join(' '), kw.split(' ').slice(0, 2).join(' ')]) {
+      if (unsplashMap.has(tryKey)) {
+        return unsplashMap.get(tryKey)!;
+      }
+    }
+  }
+  // 2. Se l'IA ha fornito un URL immagine che sembra valido, proviamo a usarlo
   const imageUrl = item?.imageUrl || item?.heroImageUrl;
   if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
     const url = imageUrl.trim();
@@ -68,13 +79,32 @@ const getImageUrl = (item: any, keyword: string) => {
     if (!bad.some((b) => url.includes(b))) return url;
   }
 
-  // Fallback to picsum.photos with keyword-based seed for consistent beautiful images
-  const kw = keyword.toLowerCase().replace(/[^a-z0-9]/g, '').trim().slice(0, 60);
-  return `https://picsum.photos/seed/${kw}/800/600`;
+  // 3. Fallback to picsum.photos with keyword-based seed for consistent beautiful images
+  const seed = kw.replace(/[^a-z0-9]/g, '').trim().slice(0, 60);
+  return `https://picsum.photos/seed/${seed}/800/600`;
 };
 
-const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+// Get destination-coherent image from Unsplash only (returns null if not found)
+const getUnsplashOnly = (keyword: string, unsplashMap?: Map<string, string>): string | null => {
+  if (!unsplashMap) return null;
+  const kw = keyword.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  for (const tryKey of [kw, kw.split(' ').slice(0, 3).join(' '), kw.split(' ').slice(0, 2).join(' ')]) {
+    if (unsplashMap.has(tryKey)) {
+      return unsplashMap.get(tryKey)!;
+    }
+  }
+  return null;
+};
+
+const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, hideOnFail = false) => {
   const target = e.target as HTMLImageElement;
+  if (hideOnFail) {
+    // For Unsplash-only images: hide the container instead of showing random picsum
+    target.style.display = 'none';
+    const parent = target.parentElement;
+    if (parent) parent.style.display = 'none';
+    return;
+  }
   if (!target.dataset.fallback) {
     target.dataset.fallback = '1';
     const randomSeed = Math.random().toString(36).slice(2, 10);
@@ -560,6 +590,60 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
   const [savedFeedback, setSavedFeedback] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // ── Unsplash images: preload destination-coherent images ──────────────
+  const [unsplashImages, setUnsplashImages] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (!plan) return;
+    let cancelled = false;
+    const loadImages = async () => {
+      const newMap = new Map<string, string>();
+      const destination = plan.destinationOverview?.title || inputs?.destination || 'travel';
+      const country = inputs?.country || plan.destinationOverview?.country || '';
+
+      // Keywords to search: hero, attractions, notable activities
+      const keywords: string[] = [];
+
+      // Hero image
+      keywords.push(`${destination} ${country} landscape`.trim());
+
+      // Attractions
+      for (const attr of (plan.destinationOverview?.attractions || []).slice(0, 6)) {
+        if (attr.name) keywords.push(`${attr.name} ${destination}`);
+      }
+
+      // Notable itinerary activities (skip generic ones)
+      const GENERIC = ['check out', 'checkout', 'check-in', 'check in', 'checkin', 'colazione', 'partenza', 'riposo', 'tempo libero', 'notte in', 'pernottamento'];
+      for (const day of (plan.itinerary || []).slice(0, 5)) {
+        for (const act of (day.activities || []).slice(0, 4)) {
+          const text = ((act.name || '') + ' ' + (act.description || '')).toLowerCase();
+          if (GENERIC.some(kw => text.includes(kw))) continue;
+          if (act.name && act.name.length > 3) {
+            const loc = act.location || destination;
+            keywords.push(`${act.name} ${loc}`);
+          }
+        }
+      }
+
+      // Batch search with stagger (max 15 queries to respect rate limits)
+      const uniqueKeywords = [...new Set(keywords)].slice(0, 15);
+      for (let i = 0; i < uniqueKeywords.length; i++) {
+        if (cancelled) return;
+        // Stagger: 300ms between requests
+        if (i > 0) await new Promise(r => setTimeout(r, 300));
+        const kw = uniqueKeywords[i];
+        const url = await searchUnsplashImage(kw, 'landscape');
+        if (url) {
+          newMap.set(kw.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(), url);
+        }
+      }
+
+      if (!cancelled) setUnsplashImages(newMap);
+    };
+    loadImages();
+    return () => { cancelled = true; };
+  }, [plan?.destinationOverview?.title, inputs?.destination]);
+
   // Chiudi il menu di prenotazione quando si clicca fuori
   useEffect(() => {
     if (!openBookingMenu) return;
@@ -620,7 +704,7 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
 
   // Hero: usa destination + country come keyword per immagini più coerenti
   const heroKeyword = [inputs?.destination, inputs?.country].filter(Boolean).join(',') || plan.destinationOverview?.title || 'travel';
-  const heroUrl = getImageUrl(plan.destinationOverview, heroKeyword + ',landscape,city');
+  const heroUrl = getImageUrl(plan.destinationOverview, heroKeyword + ',landscape,city', unsplashImages);
 
   // Inizializza le notti e le selezioni con i valori suggeriti dal piano
   useEffect(() => {
@@ -1114,9 +1198,24 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.08 }}
-                className="group relative bg-white border border-brand-ink/5 p-6 rounded-3xl shadow-sm block hover:shadow-md transition-shadow"
+                className="group relative bg-white border border-brand-ink/5 overflow-hidden rounded-3xl shadow-sm block hover:shadow-md transition-shadow"
               >
-                <div className="flex flex-col h-full">
+                {(() => {
+                  const attrImgKey = `${attr.name} ${plan.destinationOverview?.title || inputs?.destination || ''}`;
+                  const attrImg = getUnsplashOnly(attrImgKey, unsplashImages);
+                  return attrImg ? (
+                    <div className="h-40 overflow-hidden">
+                      <img
+                        src={attrImg}
+                        alt={attr.name}
+                        onError={(e) => handleImageError(e, true)}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null;
+                })()}
+                <div className="flex flex-col h-full p-6">
                   {attr.category && (
                     <span className="text-[10px] font-bold uppercase tracking-widest text-brand-ink/40 mb-2">{attr.category}</span>
                   )}
@@ -1356,6 +1455,11 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
                               const cardLink = isGeneric ? undefined : (bookingLink || mapsLink || webSearchLink || undefined);
                               const CardTag = cardLink ? 'a' : 'div';
                               const cardProps = cardLink ? { href: cardLink, target: '_blank', rel: 'noopener noreferrer' } : {};
+                              // Unsplash image for this activity (only if found)
+                              const actImageKey = !isGeneric && !isRoute && act.name && act.name.length > 3
+                                ? `${act.name} ${act.location || plan.destinationOverview?.title || inputs?.destination || ''}`
+                                : null;
+                              const actImageUrl = actImageKey ? getUnsplashOnly(actImageKey, unsplashImages) : null;
                               return (
                               <CardTag
                                 key={j}
@@ -1368,6 +1472,17 @@ function ResultsView({ plan, inputs, onReset, onShowTrips, onModify, onUpdatePla
                                     : "border-brand-ink/5"
                                 )}
                               >
+                                {actImageUrl && (
+                                  <div className="-mx-6 -mt-6 mb-4 rounded-t-3xl overflow-hidden h-40">
+                                    <img
+                                      src={actImageUrl}
+                                      alt={act.name || ''}
+                                      onError={(e) => handleImageError(e, true)}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  </div>
+                                )}
                                 <div className="flex items-start justify-between mb-3">
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs font-mono bg-white px-2 py-0.5 rounded-md text-brand-ink/60 shadow-sm">{act.time}</span>

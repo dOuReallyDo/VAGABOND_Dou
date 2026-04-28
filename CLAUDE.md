@@ -21,12 +21,15 @@ Create `.env` in the project root:
 ANTHROPIC_API_KEY=sk-ant-...
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-GOOGLE_SAFE_BROWSING_API_KEY=your-key
+GOOGLE_SAFE_BROWSING_API_KEY=***
+VITE_UNSPLASH_ACCESS_KEY=your-unsplash-access-key
 ```
 
 `ANTHROPIC_API_KEY` is served via `GET /api/config` (Express) and also injected at build time by Vite via `process.env.ANTHROPIC_API_KEY`. The client fetches the server endpoint first, falling back to the Vite-injected value.
 
 `GOOGLE_SAFE_BROWSING_API_KEY` is optional. When set, the `/api/check-url` endpoint proxies requests to Google's Safe Browsing API to verify unknown URLs. Without it, the system operates in **whitelist-only mode** (URLs on trusted domains pass, all other unknown domains are replaced with safe alternatives).
+
+`VITE_UNSPLASH_ACCESS_KEY` is optional. When set, the app searches Unsplash for destination-coherent images (hero, attractions, itinerary activities). Free tier: 50 requests/hour. Without it, falls back to picsum.photos. Get a key at https://unsplash.com/developers.
 
 ## Architecture
 
