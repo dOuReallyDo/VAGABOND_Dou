@@ -18,7 +18,7 @@ npm run test:watch # Run Vitest in watch mode
 Create `.env` in the project root:
 
 ```env
-ANTHROPIC_API_KEY=***
+ANTHROPIC_API_KEY=sk-ant-...
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 GOOGLE_SAFE_BROWSING_API_KEY=***
@@ -46,7 +46,7 @@ The entire app UI lives in `src/` and runs in the browser. **The Anthropic SDK i
 
 Three exported functions:
 - `generateTravelPlan(inputs, onProgress?)` — main function, calls `claude-sonnet-4-6` with `web_search` tool (up to 6 uses), returns a Zod-validated `TravelPlan`
-- `getDestinationCountries(destination)` — calls `claude-haiku-4-5-20251001` to resolve ambiguous destination names to country lists
+- `getDestinationCountries(destination)` — **uses Nominatim (OpenStreetMap) API**, NOT Claude. Free, instant (~100ms), zero token cost. Returns Italian country names. In-memory cache with 30-min TTL. Debounced 900ms in App.tsx.
 - `summarizeAccommodationReviews(...)` — calls `claude-haiku-4-5-20251001` with `web_search` to fetch real hotel prices/reviews
 
 The prompt in `generateTravelPlan` is Italian-language and dynamically injects traveler profile rules (pace, traveler type, interests, mobility) as explicit AI instructions.
@@ -67,8 +67,6 @@ React context (`AuthProvider`) wrapping Supabase auth. Exposes:
 - `updateProfile`, `refreshProfile`
 
 `TravelerProfile` type is defined here (fields: `age_range`, `traveler_type`, `interests[]`, `pace`, `mobility`, `familiarity`, `display_name`).
-
-**Token refresh resilience**: `onAuthStateChange` only clears user/session on explicit `SIGNED_OUT` event. Transient null sessions during `TOKEN_REFRESHED` are ignored (prevents false logouts). `signOut()` also clears `vagabond_saved_trips_local` and `vagabond_traveler_profile` from localStorage.
 
 ### Storage (`src/lib/storage.ts`)
 
