@@ -254,9 +254,16 @@ export async function saveTrip(
   userId?: string
 ): Promise<SavedTrip | null> {
   if (userId) {
+    // Ensure we have a valid Supabase session before attempting insert
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) {
+      throw new Error('Sessione scaduta — effettua di nuovo il login');
+    }
+
     const slimPlan = slimPlanForSave(trip.plan);
     const planSize = new Blob([JSON.stringify(slimPlan)]).size;
     console.log('[SaveTrip] Plan JSON size:', (planSize / 1024).toFixed(1), 'KB');
+    console.log('[SaveTrip] Session valid, user:', sessionData.session.user.id);
 
     // If plan is still huge (>800KB), strip verbose fields to fit Supabase limits
     let planToSave = slimPlan;
@@ -267,12 +274,13 @@ export async function saveTrip(
       console.log('[SaveTrip] After strip:', (newSize / 1024).toFixed(1), 'KB');
     }
 
-    const TIMEOUT_MS = 30_000; // 30s — large payloads on free tier can be slow
+    const TIMEOUT_MS = 15_000;
     const maxRetries = 2;
     let lastError: any = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
+        console.log(`[SaveTrip] Attempt ${attempt + 1}/${maxRetries + 1}...`);
         const insertPromise = supabase
           .from("saved_trips")
           .insert({
@@ -282,10 +290,10 @@ export async function saveTrip(
             inputs: trip.inputs,
             plan: planToSave,
             is_favorite: trip.is_favorite,
-          }); // No .select().single() — avoids timeout on free tier
+          });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout: il server non risponde (30s)")), TIMEOUT_MS)
+          setTimeout(() => reject(new Error("Timeout: il server non risponde (15s)")), TIMEOUT_MS)
         );
 
         const { error } = await Promise.race([insertPromise, timeoutPromise]);
@@ -293,8 +301,8 @@ export async function saveTrip(
           console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
           throw new Error(error.message);
         }
-        console.log('[SaveTrip] Saved successfully (fire-and-forget insert)');
-        return null; // No data returned — insert-only
+        console.log('[SaveTrip] Saved successfully');
+        return null;
       } catch (err) {
         lastError = err;
         if (attempt < maxRetries) {
