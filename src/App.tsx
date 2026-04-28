@@ -2380,23 +2380,26 @@ function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoad
   return (
     <div className="min-h-screen bg-brand-paper flex flex-col lg:flex-row">
       {/* Left Side - Image & Branding */}
-      <div className="lg:w-5/12 relative min-h-[40vh] lg:min-h-screen flex flex-col justify-end p-8 md:p-16 overflow-hidden">
+      <div className="lg:w-5/12 relative min-h-[40vh] lg:min-h-screen flex flex-col items-center justify-start p-8 md:p-16 overflow-hidden">
         <img 
           src={getHeroImage(bgSeed)}
           alt="Travel Inspiration" 
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/10 to-black/80" />
         <div className="absolute inset-0 bg-brand-ink/10" />
         
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10 flex flex-col items-center text-center">
-          <div className="mb-6 inline-block bg-white rounded-2xl px-6 py-4 shadow-lg">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative z-10 mt-8 lg:mt-16">
+          <div className="inline-block bg-white rounded-2xl px-5 py-3 shadow-lg">
             <img
               src="/leowanderlogo.png"
               alt="Leo Wander"
-              className="w-48 md:w-64 h-auto"
+              className="w-36 md:w-44 h-auto"
             />
           </div>
+        </motion.div>
+        
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="relative z-10 mt-auto mb-8 text-center">
           <p className="text-lg md:text-xl font-serif italic text-white/90 max-w-md drop-shadow-md">
             Il tuo concierge digitale per viaggi autentici e indimenticabili.
           </p>
@@ -2482,8 +2485,8 @@ function FormView({ onSubmit, loading, initialShowTrips, onShowTripsDone, onLoad
             {/* Profile Step */}
             {view === 'form' && formStep === 'profile' && (
               <>
-                <div className="bg-gradient-to-br from-brand-accent/10 to-brand-accent/5 border-2 border-brand-accent/30 rounded-3xl p-8 mb-8 shadow-lg shadow-brand-accent/5">
-                  <h2 className="text-4xl md:text-5xl mb-3 font-serif text-brand-ink leading-tight">
+                <div className="bg-gradient-to-br from-brand-accent/10 to-brand-accent/5 border-2 border-brand-accent/30 rounded-3xl p-6 mb-8 shadow-lg shadow-brand-accent/5">
+                  <h2 className="text-2xl md:text-3xl mb-3 font-serif text-brand-ink leading-tight">
                     🎭 Dimmi chi sei<span className="text-brand-accent"> per cercare un viaggio solo per te!</span>
                   </h2>
                   <p className="text-brand-ink/60 text-base leading-relaxed">
