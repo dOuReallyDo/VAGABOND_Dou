@@ -60,6 +60,86 @@ function slimPlanForSave(plan: any): any {
   return slim;
 }
 
+/** Aggressively strip verbose text fields if plan is still too large after slimming.
+ *  Truncates long descriptions, review summaries, tips, pros/cons to ~50 chars. */
+function stripVerboseFields(plan: any): any {
+  if (!plan || typeof plan !== 'object') return plan;
+  const stripped = JSON.parse(JSON.stringify(plan));
+
+  // Truncate itinerary activity descriptions and tips
+  if (Array.isArray(stripped.itinerary)) {
+    for (const day of stripped.itinerary) {
+      if (Array.isArray(day.activities)) {
+        for (const act of day.activities) {
+          if (act.description && act.description.length > 60) {
+            act.description = act.description.slice(0, 57) + '...';
+          }
+          if (act.tips && act.tips.length > 60) {
+            act.tips = act.tips.slice(0, 57) + '...';
+          }
+          delete act.sourceUrl;
+          delete act.lat;
+          delete act.lng;
+        }
+      }
+    }
+  }
+
+  // Truncate accommodation reviews
+  if (Array.isArray(stripped.accommodations)) {
+    for (const stop of stripped.accommodations) {
+      if (Array.isArray(stop.options)) {
+        for (const opt of stop.options) {
+          if (opt.reviewSummary && opt.reviewSummary.length > 50) {
+            opt.reviewSummary = opt.reviewSummary.slice(0, 47) + '...';
+          }
+          if (opt.address) delete opt.address;
+          if (opt.amenities) delete opt.amenities;
+        }
+      }
+    }
+  }
+
+  // Truncate restaurant reviews
+  if (Array.isArray(stripped.bestRestaurants)) {
+    for (const stop of stripped.bestRestaurants) {
+      if (Array.isArray(stop.options)) {
+        for (const opt of stop.options) {
+          if (opt.reviewSummary && opt.reviewSummary.length > 50) {
+            opt.reviewSummary = opt.reviewSummary.slice(0, 47) + '...';
+          }
+          delete opt.sourceUrl;
+          delete opt.address;
+        }
+      }
+    }
+  }
+
+  // Truncate attraction descriptions
+  if (stripped.destinationOverview?.attractions) {
+    for (const attr of stripped.destinationOverview.attractions) {
+      if (attr.description && attr.description.length > 60) {
+        attr.description = attr.description.slice(0, 57) + '...';
+      }
+      delete attr.sourceUrl;
+      delete attr.lat;
+      delete attr.lng;
+    }
+  }
+
+  // Remove travel blogs entirely (least important)
+  delete stripped.travelBlogs;
+
+  // Truncate safety and health
+  if (stripped.safetyAndHealth) {
+    if (stripped.safetyAndHealth.safetyWarnings?.length > 80) {
+      stripped.safetyAndHealth.safetyWarnings = stripped.safetyAndHealth.safetyWarnings.slice(0, 77) + '...';
+    }
+  }
+
+  return stripped;
+}
+
 // =============================================
 // Profile Storage (Supabase + localStorage fallback)
 // =============================================
@@ -174,33 +254,57 @@ export async function saveTrip(
   userId?: string
 ): Promise<SavedTrip | null> {
   if (userId) {
-    const TIMEOUT_MS = 10_000;
-      const insertPromise = supabase
-      .from("saved_trips")
-      .insert({
-        user_id: userId,
-        trip_name: trip.trip_name,
-        destination: trip.destination,
-        inputs: trip.inputs,
-        plan: slimPlanForSave(trip.plan),
-        is_favorite: trip.is_favorite,
-      })
-      .select()
-      .single();
+    const slimPlan = slimPlanForSave(trip.plan);
+    const planSize = new Blob([JSON.stringify(slimPlan)]).size;
+    console.log('[SaveTrip] Plan JSON size:', (planSize / 1024).toFixed(1), 'KB');
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout: il server non risponde")), TIMEOUT_MS)
-    );
-
-    const { data, error } = await Promise.race([insertPromise, timeoutPromise]);
-    if (error) {
-      console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
-      console.error('[SaveTrip] Payload plan keys:', Object.keys(trip.plan || {}));
-      const planSize = new Blob([JSON.stringify(trip.plan)]).size;
-      console.error('[SaveTrip] Plan JSON size:', (planSize / 1024).toFixed(1), 'KB');
-      throw new Error(error.message);
+    // If plan is still huge (>800KB), strip verbose fields to fit Supabase limits
+    let planToSave = slimPlan;
+    if (planSize > 800_000) {
+      console.warn('[SaveTrip] Plan too large, stripping verbose fields...');
+      planToSave = stripVerboseFields(slimPlan);
+      const newSize = new Blob([JSON.stringify(planToSave)]).size;
+      console.log('[SaveTrip] After strip:', (newSize / 1024).toFixed(1), 'KB');
     }
-    return data as SavedTrip;
+
+    const TIMEOUT_MS = 30_000; // 30s — large payloads on free tier can be slow
+    const maxRetries = 2;
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const insertPromise = supabase
+          .from("saved_trips")
+          .insert({
+            user_id: userId,
+            trip_name: trip.trip_name,
+            destination: trip.destination,
+            inputs: trip.inputs,
+            plan: planToSave,
+            is_favorite: trip.is_favorite,
+          })
+          .select()
+          .single();
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout: il server non risponde (30s)")), TIMEOUT_MS)
+        );
+
+        const { data, error } = await Promise.race([insertPromise, timeoutPromise]);
+        if (error) {
+          console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
+          throw new Error(error.message);
+        }
+        return data as SavedTrip;
+      } catch (err) {
+        lastError = err;
+        if (attempt < maxRetries) {
+          console.warn(`[SaveTrip] Attempt ${attempt + 1} failed, retrying in 2s...`, err);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+    }
+    throw lastError;
   }
 
   // Guest fallback: localStorage only when not authenticated
