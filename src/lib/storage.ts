@@ -282,20 +282,19 @@ export async function saveTrip(
             inputs: trip.inputs,
             plan: planToSave,
             is_favorite: trip.is_favorite,
-          })
-          .select()
-          .single();
+          }); // No .select().single() — avoids timeout on free tier
 
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("Timeout: il server non risponde (30s)")), TIMEOUT_MS)
         );
 
-        const { data, error } = await Promise.race([insertPromise, timeoutPromise]);
+        const { error } = await Promise.race([insertPromise, timeoutPromise]);
         if (error) {
           console.error('[SaveTrip] Supabase error:', JSON.stringify(error, null, 2));
           throw new Error(error.message);
         }
-        return data as SavedTrip;
+        console.log('[SaveTrip] Saved successfully (fire-and-forget insert)');
+        return null; // No data returned — insert-only
       } catch (err) {
         lastError = err;
         if (attempt < maxRetries) {
