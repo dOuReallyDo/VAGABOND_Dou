@@ -19,7 +19,7 @@ import { generateTravelPlan, summarizeAccommodationReviews, getDestinationCountr
 import { TravelMap } from './components/TravelMap';
 import { useAuth } from './lib/auth';
 import { loadProfile, saveProfile, loadTrips, saveTrip, deleteTrip, toggleFavorite, migrateLocalTripsToSupabase, type SavedTrip } from './lib/storage';
-import { sanitizeTravelPlan } from './lib/urlSafety';
+import { sanitizeTravelPlanAsync } from './lib/urlSafety';
 import { searchUnsplashImage } from './services/unsplashService';
 import { AuthForm } from './components/AuthForm';
 import { supabase } from './lib/supabase';
@@ -3211,7 +3211,7 @@ export default function App() {
         setLoadingStep(step);
         setLoadingProgress(progress);
       });
-      const sanitizedResult = sanitizeTravelPlan(result, { startDate: inputs.startDate, endDate: inputs.endDate, people: inputs.people });
+      const sanitizedResult = await sanitizeTravelPlanAsync(result, { startDate: inputs.startDate, endDate: inputs.endDate, people: inputs.people });
       setPlan(sanitizedResult);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
@@ -3239,7 +3239,7 @@ export default function App() {
         setLoadingStep(step);
         setLoadingProgress(progress);
       });
-      const sanitizedResult = sanitizeTravelPlan(result, { startDate: modifiedInputs.startDate, endDate: modifiedInputs.endDate, people: modifiedInputs.people });
+      const sanitizedResult = await sanitizeTravelPlanAsync(result, { startDate: modifiedInputs.startDate, endDate: modifiedInputs.endDate, people: modifiedInputs.people });
       setPlan(sanitizedResult);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {

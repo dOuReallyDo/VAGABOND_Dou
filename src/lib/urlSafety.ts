@@ -378,11 +378,298 @@ export function getSafeAlternative(
 // ─── TRAVEL PLAN SANITIZATION ──────────────────────────────────────────
 
 import type { TravelPlan } from '../shared/contract';
+import { checkUrlsSafety } from './safeBrowsing';
+
+/**
+ * Collects all URLs from a travel plan and their context info for batch verification.
+ * Returns an array of { url, context, details } objects.
+ */
+function collectAllUrlsWithInfo(
+  plan: TravelPlan,
+  travelInputs: { startDate?: string; endDate?: string; people?: { adults: number; children: { age: number }[] } }
+): Array<{ url: string; context: UrlContext; details: Parameters<typeof getSafeAlternative>[2] }> {
+  const entries: Array<{ url: string; context: UrlContext; details: Parameters<typeof getSafeAlternative>[2] }> = [];
+  const city = plan.destinationOverview?.title || '';
+
+  // Attractions sourceUrl
+  plan.destinationOverview?.attractions?.forEach(attr => {
+    if (attr.sourceUrl) entries.push({ url: attr.sourceUrl, context: 'attraction', details: { name: attr.name, city } });
+  });
+
+  // Activity sourceUrl (within itinerary days)
+  plan.itinerary?.forEach(day => {
+    day.activities.forEach(activity => {
+      if (activity.sourceUrl) entries.push({ url: activity.sourceUrl, context: 'attraction', details: { name: activity.name || activity.location || '', city } });
+    });
+  });
+
+  // Flight bookingUrl
+  plan.flights?.forEach(segment => {
+    segment.options.forEach(option => {
+      if (option.bookingUrl) entries.push({ url: option.bookingUrl, context: 'flight', details: { name: option.airline } });
+    });
+  });
+
+  // Accommodation bookingUrl
+  plan.accommodations?.forEach(stop => {
+    stop.options.forEach(option => {
+      if (option.bookingUrl) entries.push({ url: option.bookingUrl, context: 'hotel', details: { name: option.name, city: stop.stopName, checkin: travelInputs.startDate, checkout: travelInputs.endDate, adults: travelInputs.people?.adults, children: travelInputs.people?.children } });
+    });
+  });
+
+  // Restaurant sourceUrl
+  plan.bestRestaurants?.forEach(stop => {
+    stop.options.forEach(option => {
+      if (option.sourceUrl) entries.push({ url: option.sourceUrl, context: 'restaurant', details: { name: option.name, city: stop.stopName } });
+    });
+  });
+
+  // Private transfer links
+  plan.transportInfo?.privateTransferLinks?.forEach(link => {
+    if (link.url) entries.push({ url: link.url, context: 'transport', details: { name: link.provider || '', city } });
+  });
+
+  // Travel blog links
+  plan.travelBlogs?.forEach(blog => {
+    if (blog.url) entries.push({ url: blog.url, context: 'blog', details: { name: blog.title || '' } });
+  });
+
+  // Image URLs (heroImageUrl)
+  if (plan.destinationOverview?.heroImageUrl) {
+    entries.push({ url: plan.destinationOverview.heroImageUrl, context: 'generic', details: {} });
+  }
+
+  // Activity imageUrls
+  plan.itinerary?.forEach(day => {
+    day.activities.forEach(activity => {
+      if (activity.imageUrl) entries.push({ url: activity.imageUrl, context: 'generic', details: {} });
+    });
+  });
+
+  // Accommodation imageUrls
+  plan.accommodations?.forEach(stop => {
+    stop.options.forEach(option => {
+      if (option.imageUrl) entries.push({ url: option.imageUrl, context: 'generic', details: {} });
+    });
+  });
+
+  return entries;
+}
+
+/**
+ * Async version of sanitizeTravelPlan that verifies unknown domains
+ * via Google Safe Browsing API before replacing their URLs.
+ *
+ * Flow:
+ * 1. Collect all URLs from the plan
+ * 2. Run synchronous check (whitelist + structure)
+ * 3. For URLs that are "valid-unknown" (not whitelisted, but structurally valid),
+ *    call Google Safe Browsing API in batch
+ * 4. Replace ONLY URLs that the API confirms as unsafe OR are structurally invalid
+ * 5. Keep URLs that the API says are safe
+ *
+ * Falls back to sync-only mode if the API is unavailable (whitelist-only).
+ */
+export async function sanitizeTravelPlanAsync(
+  plan: TravelPlan,
+  travelInputs: { startDate?: string; endDate?: string; people?: { adults: number; children: { age: number }[] } }
+): Promise<TravelPlan> {
+  const sanitized = JSON.parse(JSON.stringify(plan)) as TravelPlan;
+  const allUrlEntries = collectAllUrlsWithInfo(sanitized, travelInputs);
+
+  // Step 1: Sync check — categorize every URL
+  const unknownUrls: string[] = [];
+  const urlCheckResults = new Map<string, UrlSafetyResult>();
+
+  for (const entry of allUrlEntries) {
+    const result = isUrlSafe(entry.url);
+    if (result.category === 'valid-unknown') {
+      unknownUrls.push(entry.url);
+    }
+    urlCheckResults.set(entry.url, result);
+  }
+
+  // Step 2: Batch verify unknown URLs via Safe Browsing API
+  const safeBrowsingResults = new Map<string, boolean>(); // url → isSafe
+  if (unknownUrls.length > 0) {
+    console.log(`[URL Safety] Checking ${unknownUrls.length} unknown URLs via Google Safe Browsing API...`);
+    try {
+      const sbResults = await checkUrlsSafety(unknownUrls);
+      for (const url of unknownUrls) {
+        const result = sbResults.get(url);
+        if (result) {
+          safeBrowsingResults.set(url, result.safe);
+          if (result.cached) {
+            console.log(`[URL Safety] Cached result for ${url}: ${result.safe ? 'safe' : 'unsafe'}`);
+          } else {
+            console.log(`[URL Safety] API result for ${url}: ${result.safe ? 'safe' : 'unsafe'}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[URL Safety] Safe Browsing API batch call failed, falling back to whitelist-only mode:', err);
+      // On API failure, all unknown URLs are treated as unsafe (fail closed)
+    }
+  }
+
+  // Step 3: Build final decision map — URL → keep original? or replace?
+  const urlDecision = new Map<string, { keepOriginal: boolean; replacementUrl: string | null }>();
+
+  for (const entry of allUrlEntries) {
+    const syncResult = urlCheckResults.get(entry.url);
+    if (!syncResult) continue;
+
+    if (syncResult.isSafe) {
+      // Whitelisted — keep
+      urlDecision.set(entry.url, { keepOriginal: true, replacementUrl: null });
+    } else if (syncResult.category === 'valid-unknown') {
+      // Check Safe Browsing API result
+      const sbSafe = safeBrowsingResults.get(entry.url);
+      if (sbSafe === true) {
+        // API says safe — KEEP the original URL!
+        console.log(`[URL Safety] ✅ Keeping verified-safe URL: ${entry.url}`);
+        urlDecision.set(entry.url, { keepOriginal: true, replacementUrl: null });
+      } else {
+        // API says unsafe OR API failed — replace
+        const alt = getSafeAlternative(entry.url, entry.context, entry.details);
+        urlDecision.set(entry.url, { keepOriginal: false, replacementUrl: alt });
+      }
+    } else {
+      // Structurally invalid — always replace
+      const alt = getSafeAlternative(entry.url, entry.context, entry.details);
+      urlDecision.set(entry.url, { keepOriginal: false, replacementUrl: alt });
+    }
+  }
+
+  // Step 4: Apply decisions to travel plan
+  const city = sanitized.destinationOverview?.title || '';
+
+  // 1. Attractions sourceUrl
+  sanitized.destinationOverview?.attractions?.forEach(attr => {
+    if (attr.sourceUrl) {
+      const decision = urlDecision.get(attr.sourceUrl);
+      if (decision && !decision.keepOriginal) {
+        attr.sourceUrl = decision.replacementUrl || undefined;
+      }
+    }
+  });
+
+  // 2. Activity sourceUrl
+  sanitized.itinerary?.forEach(day => {
+    day.activities.forEach(activity => {
+      if (activity.sourceUrl) {
+        const decision = urlDecision.get(activity.sourceUrl);
+        if (decision && !decision.keepOriginal) {
+          activity.sourceUrl = decision.replacementUrl || undefined;
+        }
+      }
+    });
+  });
+
+  // 3. Flight bookingUrl
+  sanitized.flights?.forEach(segment => {
+    segment.options.forEach(option => {
+      if (option.bookingUrl) {
+        const decision = urlDecision.get(option.bookingUrl);
+        if (decision && !decision.keepOriginal) {
+          option.bookingUrl = decision.replacementUrl || undefined;
+        }
+      }
+    });
+  });
+
+  // 4. Accommodation bookingUrl
+  sanitized.accommodations?.forEach(stop => {
+    stop.options.forEach(option => {
+      if (option.bookingUrl) {
+        const decision = urlDecision.get(option.bookingUrl);
+        if (decision && !decision.keepOriginal) {
+          option.bookingUrl = decision.replacementUrl || undefined;
+        }
+      }
+    });
+  });
+
+  // 5. Restaurant sourceUrl
+  sanitized.bestRestaurants?.forEach(stop => {
+    stop.options.forEach(option => {
+      if (option.sourceUrl) {
+        const decision = urlDecision.get(option.sourceUrl);
+        if (decision && !decision.keepOriginal) {
+          option.sourceUrl = decision.replacementUrl || undefined;
+        }
+      }
+    });
+  });
+
+  // 6. Private transfer links — filter out unsafe
+  if (sanitized.transportInfo?.privateTransferLinks) {
+    sanitized.transportInfo.privateTransferLinks = sanitized.transportInfo.privateTransferLinks.filter(link => {
+      if (link.url) {
+        const decision = urlDecision.get(link.url);
+        return decision?.keepOriginal ?? false;
+      }
+      return true;
+    });
+  }
+
+  // 7. Travel blog links — remove unsafe
+  if (sanitized.travelBlogs) {
+    sanitized.travelBlogs = sanitized.travelBlogs
+      .map(blog => {
+        if (blog.url) {
+          const decision = urlDecision.get(blog.url);
+          if (decision && !decision.keepOriginal) return null;
+        }
+        return blog;
+      })
+      .filter(Boolean) as typeof sanitized.travelBlogs;
+  }
+
+  // 8-10. Image URLs — strip non-safe ones (keep if whitelisted or verified by API)
+  const safeImageDomains = ['picsum.photos', 'images.unsplash.com', 'upload.wikimedia.org'];
+  const isSafeImage = (url: string): boolean => {
+    const decision = urlDecision.get(url);
+    if (decision?.keepOriginal) {
+      const hostname = getHostname(url);
+      // For images, only keep if from a known image CDN even if API-safe
+      return hostname !== null && safeImageDomains.some(d => hostname === d || hostname.endsWith(`.${d}`));
+    }
+    return false;
+  };
+
+  if (sanitized.destinationOverview?.heroImageUrl && !isSafeImage(sanitized.destinationOverview.heroImageUrl)) {
+    sanitized.destinationOverview.heroImageUrl = undefined;
+  }
+
+  sanitized.itinerary?.forEach(day => {
+    day.activities.forEach(activity => {
+      if (activity.imageUrl && !isSafeImage(activity.imageUrl)) {
+        activity.imageUrl = undefined;
+      }
+    });
+  });
+
+  sanitized.accommodations?.forEach(stop => {
+    stop.options.forEach(option => {
+      if (option.imageUrl && !isSafeImage(option.imageUrl)) {
+        option.imageUrl = undefined;
+      }
+    });
+  });
+
+  const stats = getSanitizationStats(plan, sanitized);
+  console.log(`[URL Safety] Sanitization complete: ${stats.keptOriginal} kept, ${stats.replaced} replaced, ${stats.removed} removed out of ${stats.totalUrls} total URLs`);
+  return sanitized;
+}
 
 /**
  * Sanitizes all URLs in a TravelPlan by checking each one against
  * the whitelist and structural validation. Unsafe URLs are replaced
  * with safe alternatives or removed.
+ *
+ * NOTE: This is the SYNC version that does NOT call the Google Safe Browsing API.
+ * For full safety verification, use sanitizeTravelPlanAsync() instead.
  *
  * @param plan - The travel plan object from the AI
  * @param travelInputs - The original travel inputs (needed for date/guest info in alternatives)
