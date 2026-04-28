@@ -58,8 +58,8 @@ Utente → Profile Form → Travel Form → Claude API (con profilo nel prompt)
 ```
 
 ### Auth Pattern
-- `persistSession: false` nel client Supabase — nessuna sessione scritta o letta da localStorage
-- Ogni apertura/ricaricamento della pagina parte come guest; il login è richiesto esplicitamente
+- `persistSession: true` nel client Supabase — sessione scritta e letta da localStorage
+- Ogni ricaricamento della pagina ripristina la sessione se l'utente era loggato
 - `AuthProvider` usa `onAuthStateChange` come unica fonte di verità; `loading` è costante `false` (mai bloccante)
 - La UI è sempre disponibile immediatamente come guest; lo stato loggato arriva in modo asincrono se l'utente fa login nella stessa tab
 
@@ -114,3 +114,5 @@ Il progetto è predisposto per Vercel:
 - `ANTHROPIC_API_KEY`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `GOOGLE_SAFE_BROWSING_API_KEY` (opzionale, ma raccomandata — attiva verifica URL via API)
+- `VITE_UNSPLASH_ACCESS_KEY` (opzionale — attiva immagini correlate alla destinazione)

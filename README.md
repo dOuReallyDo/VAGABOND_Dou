@@ -26,8 +26,8 @@ Fork di [Vagabond AI](https://github.com/dOuReallyDo/Vagabond) con profilo viagg
 Il sistema implementa una protezione a 3 livelli per tutti i link generati dall'AI:
 
 1. **Prompt-level**: Claude riceve istruzioni esplicite di usare solo domini fidati
-2. **Post-processing**: `sanitizeTravelPlan()` verifica ogni URL — i domini whitelist passano, gli URL strutturalmente sospetti (IP, shortener, TLD sospetti, HTTP, redirect params) vengono sostituiti con alternative sicure (Booking.com, TripAdvisor, Google Maps)
-3. **Google Safe Browsing API** (opzionale): gli URL su domini sconosciuti vengono verificati contro il database malware/phishing di Google
+2. **Post-processing**: `sanitizeTravelPlanAsync()` verifica ogni URL — i domini whitelist passano, gli URL strutturalmente sospetti (IP, shortener, TLD sospetti, HTTP, redirect params) vengono sostituiti con alternative sicure (Booking.com, TripAdvisor, Google Maps). I domini sconosciuti ma strutturalmente validi vengono verificati in batch via Safe Browsing API: se l'API conferma sicuri, l'URL originale viene **mantenuto** (es. siti ufficiali hotel).
+3. **Google Safe Browsing API**: gli URL su domini sconosciuti vengono verificati contro il database malware/phishing di Google in batch. Se l'API dice safe → l'URL originale è mantenuto. Se unsafe → rimpiazzato.
 
 Politica: gli URL non sicuri vengono **rimossi e sostituiti**, mai mostrati con avvisi.
 
